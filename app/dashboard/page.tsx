@@ -33,29 +33,35 @@ export default function DashboardPage() {
     const fetchDashboardData = async () => {
       setLoading(true)
       try {
-        // Fetch all books
+        // Fetch books
         const { data: booksData } = await supabase.from("books").select("*")
-
         // Fetch loans
         const { data: loansData } = await supabase.from("loans").select("*")
-        const activeLoansData = loansData?.filter(loan => loan.status === "active") || []
-        const overdueLoansData = loansData?.filter(loan => loan.status === "overdue") || []
+        const activeLoans = loansData?.filter(l => l.status === "active") || []
+        const overdueLoans = loansData?.filter(l => l.status === "overdue") || []
 
         // Fetch borrowers
         const { data: borrowersData } = await supabase.from("borrowers").select("*")
 
-        // Compute stats
+        // Compute dashboard stats
+        const totalBooks = booksData?.length || 0
+        const availableBooks = booksData?.filter(b => b.status === "available").length || 0
+        const checkedOutBooks = booksData?.filter(b => b.status === "checked_out").length || 0
+        const reservedBooks = booksData?.filter(b => b.status === "reserved").length || 0
+        const totalBorrowers = borrowersData?.length || 0
+        const overdueBooksCount = overdueLoans?.filter(loan => booksData?.some(b => b.id === loan.book_id)).length || 0
+
         setDashboardStats({
-          totalBooks: booksData?.length || 0,
-          availableBooks: booksData?.filter(b => b.status === 'available').length || 0,
-          checkedOutBooks: booksData?.filter(b => b.status === 'checked_out').length || 0,
-          reservedBooks: booksData?.filter(b => b.status === 'reserved').length || 0,
-          totalBorrowers: borrowersData?.length || 0,
-          overdueBooks: overdueLoansData?.filter(loan => booksData?.some(b => b.id === loan.book_id)).length || 0,
+          totalBooks,
+          availableBooks,
+          checkedOutBooks,
+          reservedBooks,
+          totalBorrowers,
+          overdueBooks: overdueBooksCount,
         })
 
-        // Map recent activity to include book titles
-        const recentActivityWithBooks = activeLoansData.map(loan => {
+        // Recent activity with book info
+        const recentActivityWithBooks = activeLoans.map(loan => {
           const book = booksData?.find(b => b.id === loan.book_id)
           return {
             ...loan,
@@ -65,7 +71,7 @@ export default function DashboardPage() {
         })
         setRecentActivity(recentActivityWithBooks)
 
-        // Popular books based on loan counts
+        // Popular books based on number of checkouts
         const checkoutCounts: Record<string, number> = {}
         loansData?.forEach(loan => {
           if (loan.status === "active" || loan.status === "returned") {
@@ -77,11 +83,7 @@ export default function DashboardPage() {
           .map(([book_id, count]) => {
             const book = booksData?.find(b => b.id === book_id)
             if (!book) return null
-            return {
-              title: book.title,
-              author: book.author,
-              checkouts: count
-            }
+            return { title: book.title, author: book.author, checkouts: count }
           })
           .filter(Boolean)
           .sort((a, b) => b.checkouts - a.checkouts)
@@ -89,19 +91,34 @@ export default function DashboardPage() {
 
         setPopularBooks(popularBooksList)
 
-        // Overdue books with details
-        const overdueBooksList = overdueLoansData
-          .map(loan => {
+        // Overdue books with borrower info
+        const { data: overdueLoansWithBorrower, error: overdueError } = await supabase
+          .from("loans")
+          .select(`
+            *,
+            borrower:borrower_id(name)
+          `)
+          .eq("status", "overdue")
+
+        if (overdueError) {
+          console.error("Error fetching overdue loans:", overdueError)
+        }
+
+        const overdueBooksList = overdueLoansWithBorrower
+          ?.map(loan => {
             const book = booksData?.find(b => b.id === loan.book_id)
             if (!book) return null
+
+            const dueDateObj = new Date(loan.due_date)
             const daysOverdue = Math.max(
-              Math.floor((new Date().getTime() - new Date(loan.due_date).getTime()) / (1000 * 60 * 60 * 24)),
+              Math.floor((new Date().getTime() - dueDateObj.getTime()) / (1000 * 60 * 60 * 24)),
               0
             )
+
             return {
               ...book,
-              borrower: loan.borrower_name,
-              dueDate: loan.due_date?.split("T")[0],
+              borrower: loan.borrower?.name || "Unknown",
+              dueDate: !isNaN(dueDateObj.getTime()) ? dueDateObj.toISOString().split("T")[0] : "Unknown",
               daysOverdue
             }
           })
@@ -156,7 +173,11 @@ export default function DashboardPage() {
                 <CardContent>
                   <div className="text-2xl font-bold">{dashboardStats.totalBooks}</div>
                   <p className="text-xs text-muted-foreground">
-                    <span className="text-green-600">+12</span> from last month
+                    {dashboardStats.totalBooks > 0 && (
+                      <span className="text-green-600">
+                        +{dashboardStats.availableBooks} available
+                      </span>
+                    )}
                   </p>
                 </CardContent>
               </Card>
@@ -169,7 +190,9 @@ export default function DashboardPage() {
                 <CardContent>
                   <div className="text-2xl font-bold">{dashboardStats.availableBooks}</div>
                   <p className="text-xs text-muted-foreground">
-                    {((dashboardStats.availableBooks / dashboardStats.totalBooks) * 100).toFixed(1)}% of total
+                    {dashboardStats.totalBooks > 0
+                      ? ((dashboardStats.availableBooks / dashboardStats.totalBooks) * 100).toFixed(1) + "% of total"
+                      : "0%"}
                   </p>
                 </CardContent>
               </Card>
@@ -182,7 +205,9 @@ export default function DashboardPage() {
                 <CardContent>
                   <div className="text-2xl font-bold">{dashboardStats.checkedOutBooks}</div>
                   <p className="text-xs text-muted-foreground">
-                    {((dashboardStats.checkedOutBooks / dashboardStats.totalBooks) * 100).toFixed(1)}% of total
+                    {dashboardStats.totalBooks > 0
+                      ? ((dashboardStats.checkedOutBooks / dashboardStats.totalBooks) * 100).toFixed(1) + "% of total"
+                      : "0%"}
                   </p>
                 </CardContent>
               </Card>
@@ -205,11 +230,11 @@ export default function DashboardPage() {
               <Card>
                 <CardHeader>
                   <CardTitle>Recent Activity</CardTitle>
-                  <CardDescription>Latest library transactions and updates</CardDescription>
+                  <CardDescription>Latest library transactions</CardDescription>
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-4">
-                    {recentActivity.map((activity) => (
+                    {recentActivity.map(activity => (
                       <div key={activity.id} className="flex items-center justify-between">
                         <div className="flex items-center gap-3">
                           <div className={`w-2 h-2 rounded-full ${activity.status === "active" ? "bg-blue-500" : "bg-red-500"}`} />
@@ -273,7 +298,7 @@ export default function DashboardPage() {
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-3">
-                    {overdueBooks.map((book) => (
+                    {overdueBooks.map(book => (
                       <div key={book.id} className="flex items-center justify-between p-3 bg-destructive/5 rounded-lg">
                         <div>
                           <p className="font-medium">{book.title}</p>

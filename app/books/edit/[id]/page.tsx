@@ -7,7 +7,6 @@ import { Sidebar } from "@/components/layout/sidebar"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Textarea } from "@/components/ui/textarea"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Alert, AlertDescription } from "@/components/ui/alert"
@@ -32,11 +31,10 @@ export default function EditBookPage() {
     author: "",
     isbn: "",
     category: "",
-    description: "",
     status: "available",
   })
 
-  // Fetch book only when bookId is available
+  // Fetch book data
   useEffect(() => {
     if (!bookId) return
 
@@ -52,18 +50,22 @@ export default function EditBookPage() {
             author: data.author,
             isbn: data.isbn,
             category: data.category,
-            description: data.description || "",
             status: data.status,
           })
         }
-      } catch (err) {
+      } catch {
         setError("Failed to fetch book data")
       } finally {
         setIsLoading(false)
       }
     }
+
     fetchBook()
   }, [bookId])
+
+  const handleInputChange = (field: string, value: string) => {
+    setFormData((prev) => ({ ...prev, [field]: value }))
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -72,18 +74,13 @@ export default function EditBookPage() {
     setError("")
 
     try {
-      const { data, error } = await supabase
-        .from("books")
-        .update(formData)
-        .eq("id", bookId)
-        .select()
-        .single()
+      const { error } = await supabase.from("books").update(formData).eq("id", bookId)
       if (error) {
-        setError(error.message || "Failed to update book.")
+        setError("Failed to update book. Please try again.")
       } else {
         router.push("/books")
       }
-    } catch (err) {
+    } catch {
       setError("Failed to update book. Please try again.")
     } finally {
       setIsLoading(false)
@@ -96,19 +93,15 @@ export default function EditBookPage() {
     try {
       const { error } = await supabase.from("books").delete().eq("id", bookId)
       if (error) {
-        setError(error.message || "Failed to delete book.")
+        setError("Failed to delete book. Please try again.")
       } else {
         router.push("/books")
       }
-    } catch (err) {
+    } catch {
       setError("Failed to delete book. Please try again.")
     } finally {
       setIsLoading(false)
     }
-  }
-
-  const handleInputChange = (field: string, value: string) => {
-    setFormData((prev) => ({ ...prev, [field]: value }))
   }
 
   return (
@@ -201,18 +194,6 @@ export default function EditBookPage() {
                         <SelectItem value="reserved">Reserved</SelectItem>
                       </SelectContent>
                     </Select>
-                  </div>
-
-                  {/* Description */}
-                  <div className="space-y-2">
-                    <Label htmlFor="description">Description</Label>
-                    <Textarea
-                      id="description"
-                      placeholder="Enter book description (optional)"
-                      value={formData.description}
-                      onChange={(e) => handleInputChange("description", e.target.value)}
-                      rows={4}
-                    />
                   </div>
 
                   {error && (
