@@ -1,7 +1,6 @@
 "use client"
 
 import type React from "react"
-
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -24,47 +23,31 @@ export default function LoginPage() {
     setError("")
 
     try {
-      // First, try to authenticate against the database
       const response = await fetch("/api/auth/login", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, password }),
       })
 
-      if (response.ok) {
-        const data = await response.json()
-        // Store auth state with user info
+      const data = await response.json()
+
+      if (response.ok && data.success) {
+        // ✅ Store user session in localStorage
         localStorage.setItem("isAuthenticated", "true")
+        localStorage.setItem("userId", data.user.id)
+        localStorage.setItem("userEmail", data.user.email)
         localStorage.setItem("userRole", data.user.role)
         localStorage.setItem("userName", data.user.name)
+
         router.push("/dashboard")
         return
       }
 
-      // If database auth fails, fallback to demo credentials
-      if (email === "admin@library.com" && password === "admin123") {
-        // Store auth state (demo user)
-        localStorage.setItem("isAuthenticated", "true")
-        localStorage.setItem("userRole", "admin")
-        localStorage.setItem("userName", "Demo Admin")
-        router.push("/dashboard")
-      } else {
-        setError("Invalid email or password")
-      }
+      // If login failed
+      setError(data.error || "Invalid email or password")
     } catch (err) {
-      console.log("[v0] Database authentication failed, trying demo credentials")
-
-      // If API call fails, fallback to demo credentials
-      if (email === "admin@library.com" && password === "admin123") {
-        localStorage.setItem("isAuthenticated", "true")
-        localStorage.setItem("userRole", "admin")
-        localStorage.setItem("userName", "Demo Admin")
-        router.push("/dashboard")
-      } else {
-        setError("Login failed. Please check your credentials.")
-      }
+      console.error("Login error:", err)
+      setError("Login failed. Please try again.")
     } finally {
       setIsLoading(false)
     }

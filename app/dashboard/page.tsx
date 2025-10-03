@@ -30,110 +30,109 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    const fetchDashboardData = async () => {
-      setLoading(true)
-      try {
-        // Fetch books
-        const { data: booksData } = await supabase.from("books").select("*")
-        // Fetch loans
-        const { data: loansData } = await supabase.from("loans").select("*")
-        const activeLoans = loansData?.filter(l => l.status === "active") || []
-        const overdueLoans = loansData?.filter(l => l.status === "overdue") || []
+  const fetchDashboardData = async () => {
+    setLoading(true)
+    try {
+      // Fetch books
+      const { data: booksData } = await supabase.from("books").select("*")
 
-        // Fetch borrowers
-        const { data: borrowersData } = await supabase.from("borrowers").select("*")
+      // ✅ Fetch loans with borrower name (JOIN)
+      const { data: loansData } = await supabase
+        .from("loans")
+        .select(`
+          *,
+          borrower:borrower_id(name)
+        `)
 
-        // Compute dashboard stats
-        const totalBooks = booksData?.length || 0
-        const availableBooks = booksData?.filter(b => b.status === "available").length || 0
-        const checkedOutBooks = booksData?.filter(b => b.status === "checked_out").length || 0
-        const reservedBooks = booksData?.filter(b => b.status === "reserved").length || 0
-        const totalBorrowers = borrowersData?.length || 0
-        const overdueBooksCount = overdueLoans?.filter(loan => booksData?.some(b => b.id === loan.book_id)).length || 0
+      const activeLoans = loansData?.filter(l => l.status === "active") || []
+      const overdueLoans = loansData?.filter(l => l.status === "overdue") || []
 
-        setDashboardStats({
-          totalBooks,
-          availableBooks,
-          checkedOutBooks,
-          reservedBooks,
-          totalBorrowers,
-          overdueBooks: overdueBooksCount,
-        })
+      // Fetch borrowers (for stats)
+      const { data: borrowersData } = await supabase.from("borrowers").select("*")
 
-        // Recent activity with book info
-        const recentActivityWithBooks = activeLoans.map(loan => {
-          const book = booksData?.find(b => b.id === loan.book_id)
-          return {
-            ...loan,
-            title: book?.title || "Unknown Book",
-            author: book?.author || "Unknown Author"
-          }
-        })
-        setRecentActivity(recentActivityWithBooks)
+      // Dashboard stats
+      const totalBooks = booksData?.length || 0
+      const availableBooks = booksData?.filter(b => b.status === "available").length || 0
+      const checkedOutBooks = booksData?.filter(b => b.status === "checked_out").length || 0
+      const reservedBooks = booksData?.filter(b => b.status === "reserved").length || 0
+      const totalBorrowers = borrowersData?.length || 0
+      const overdueBooksCount = overdueLoans?.filter(loan =>
+        booksData?.some(b => b.id === loan.book_id)
+      ).length || 0
 
-        // Popular books based on number of checkouts
-        const checkoutCounts: Record<string, number> = {}
-        loansData?.forEach(loan => {
-          if (loan.status === "active" || loan.status === "returned") {
-            checkoutCounts[loan.book_id] = (checkoutCounts[loan.book_id] || 0) + 1
-          }
-        })
+      setDashboardStats({
+        totalBooks,
+        availableBooks,
+        checkedOutBooks,
+        reservedBooks,
+        totalBorrowers,
+        overdueBooks: overdueBooksCount,
+      })
 
-        const popularBooksList = Object.entries(checkoutCounts)
-          .map(([book_id, count]) => {
-            const book = booksData?.find(b => b.id === book_id)
-            if (!book) return null
-            return { title: book.title, author: book.author, checkouts: count }
-          })
-          .filter(Boolean)
-          .sort((a, b) => b.checkouts - a.checkouts)
-          .slice(0, 5)
-
-        setPopularBooks(popularBooksList)
-
-        // Overdue books with borrower info
-        const { data: overdueLoansWithBorrower, error: overdueError } = await supabase
-          .from("loans")
-          .select(`
-            *,
-            borrower:borrower_id(name)
-          `)
-          .eq("status", "overdue")
-
-        if (overdueError) {
-          console.error("Error fetching overdue loans:", overdueError)
+      // ✅ Recent activity now includes borrower name
+      const recentActivityWithBooks = activeLoans.map(loan => {
+        const book = booksData?.find(b => b.id === loan.book_id)
+        return {
+          ...loan,
+          title: book?.title || "Unknown Book",
+          author: book?.author || "Unknown Author",
+          borrowerName: loan.borrower?.name || "Unknown Borrower",
         }
+      })
+      setRecentActivity(recentActivityWithBooks)
 
-        const overdueBooksList = overdueLoansWithBorrower
-          ?.map(loan => {
-            const book = booksData?.find(b => b.id === loan.book_id)
-            if (!book) return null
+      // Popular books
+      const checkoutCounts: Record<string, number> = {}
+      loansData?.forEach(loan => {
+        if (loan.status === "active" || loan.status === "returned") {
+          checkoutCounts[loan.book_id] = (checkoutCounts[loan.book_id] || 0) + 1
+        }
+      })
 
-            const dueDateObj = new Date(loan.due_date)
-            const daysOverdue = Math.max(
-              Math.floor((new Date().getTime() - dueDateObj.getTime()) / (1000 * 60 * 60 * 24)),
-              0
-            )
+      const popularBooksList = Object.entries(checkoutCounts)
+        .map(([book_id, count]) => {
+          const book = booksData?.find(b => b.id === book_id)
+          if (!book) return null
+          return { title: book.title, author: book.author, checkouts: count }
+        })
+        .filter(Boolean)
+        .sort((a, b) => b.checkouts - a.checkouts)
+        .slice(0, 5)
 
-            return {
-              ...book,
-              borrower: loan.borrower?.name || "Unknown",
-              dueDate: !isNaN(dueDateObj.getTime()) ? dueDateObj.toISOString().split("T")[0] : "Unknown",
-              daysOverdue
-            }
-          })
-          .filter(Boolean)
+      setPopularBooks(popularBooksList)
 
-        setOverdueBooks(overdueBooksList)
-      } catch (err) {
-        console.error("Error fetching dashboard data:", err)
-      } finally {
-        setLoading(false)
-      }
+      // Overdue books (already includes borrower info)
+      const overdueBooksList = overdueLoans
+        ?.map(loan => {
+          const book = booksData?.find(b => b.id === loan.book_id)
+          if (!book) return null
+
+          const dueDateObj = new Date(loan.due_date)
+          const daysOverdue = Math.max(
+            Math.floor((new Date().getTime() - dueDateObj.getTime()) / (1000 * 60 * 60 * 24)),
+            0
+          )
+
+          return {
+            ...book,
+            borrower: loan.borrower?.name || "Unknown",
+            dueDate: !isNaN(dueDateObj.getTime()) ? dueDateObj.toISOString().split("T")[0] : "Unknown",
+            daysOverdue
+          }
+        })
+        .filter(Boolean)
+
+      setOverdueBooks(overdueBooksList)
+    } catch (err) {
+      console.error("Error fetching dashboard data:", err)
+    } finally {
+      setLoading(false)
     }
+  }
 
-    fetchDashboardData()
-  }, [])
+  fetchDashboardData()
+}, [])
+
 
   if (loading) {
     return (
@@ -237,16 +236,23 @@ export default function DashboardPage() {
                     {recentActivity.map(activity => (
                       <div key={activity.id} className="flex items-center justify-between">
                         <div className="flex items-center gap-3">
-                          <div className={`w-2 h-2 rounded-full ${activity.status === "active" ? "bg-blue-500" : "bg-red-500"}`} />
+                          <div
+                            className={`w-2 h-2 rounded-full ${
+                              activity.status === "active" ? "bg-blue-500" : "bg-red-500"
+                            }`}
+                          />
                           <div>
                             <p className="text-sm font-medium">{activity.title}</p>
                             <p className="text-xs text-muted-foreground">
-                              Loan by {activity.borrower_name || activity.user_name}
+                              Loan by {activity.borrowerName}
                             </p>
                           </div>
                         </div>
                         <span className="text-xs text-muted-foreground">
-                          {new Date(activity.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                          {new Date(activity.created_at).toLocaleTimeString([], {
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })}
                         </span>
                       </div>
                     ))}

@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { AuthGuard } from "@/components/auth-guard"
 import { Sidebar } from "@/components/layout/sidebar"
@@ -12,17 +12,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { ArrowLeft, Save } from "lucide-react"
 import Link from "next/link"
-import { createClient } from "@supabase/supabase-js"
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-)
+import { supabase } from "@/lib/supabaseClient"  // ✅ centralized client
 
 export default function AddBookPage() {
   const router = useRouter()
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState("")
+  const [user, setUser] = useState<any>(null)
+
   const [formData, setFormData] = useState({
     title: "",
     author: "",
@@ -30,6 +27,29 @@ export default function AddBookPage() {
     category: "",
     status: "available",
   })
+
+  // ✅ Load authenticated user on mount
+  useEffect(() => {
+    const loadUser = async () => {
+      const {
+        data: { session },
+        error: sessionError,
+      } = await supabase.auth.getSession()
+
+      if (sessionError) {
+        console.error("❌ Session error:", sessionError)
+        return
+      }
+
+      if (session?.user) {
+        setUser(session.user)
+      } else {
+        console.warn("⚠️ No active session found")
+      }
+    }
+
+    loadUser()
+  }, [])
 
   const handleInputChange = (field: string, value: string) => {
     setFormData((prev) => ({ ...prev, [field]: value }))
@@ -41,13 +61,60 @@ export default function AddBookPage() {
     setError("")
 
     try {
-      const { error } = await supabase.from("books").insert([formData])
-      if (error) {
-        setError("Failed to add book. Please try again.")
-      } else {
-        router.push("/books")
+      // ✅ Recheck session before inserting
+      let currentUser = user
+      if (!currentUser) {
+        const {
+          data: { session },
+        } = await supabase.auth.getSession()
+        currentUser = session?.user || null
+        setUser(currentUser)
       }
-    } catch {
+
+      // 1️⃣ Insert the book
+      const { data: newBook, error: bookError } = await supabase
+        .from("books")
+        .insert([formData])
+        .select()
+        .single()
+
+      if (bookError) {
+        console.error("❌ Book insert error:", bookError)
+        setError("Failed to add book. Please try again.")
+        return
+      }
+
+      // 2️⃣ Insert audit log if user is available
+      if (currentUser) {
+        const logEntry = {
+          user_id: currentUser.id,
+          user_name: currentUser.user_metadata?.full_name || currentUser.email,
+          action: "Added Book",
+          entity: "books",
+          entity_id: newBook.id,
+          metadata: JSON.stringify({
+            title: newBook.title,
+            author: newBook.author,
+            isbn: newBook.isbn,
+          }),
+          created_at: new Date().toISOString(),
+        }
+
+        const { error: logError } = await supabase.from("audit_logs").insert([logEntry])
+
+        if (logError) {
+          console.error("❌ Audit log insert error:", logError)
+        } else {
+          console.log("✅ Audit log recorded:", logEntry)
+        }
+      } else {
+        console.warn("⚠️ No user found — audit log skipped")
+      }
+
+      // ✅ Redirect after success
+      router.push("/books")
+    } catch (err) {
+      console.error("❌ Unexpected error:", err)
       setError("Failed to add book. Please try again.")
     } finally {
       setIsLoading(false)
@@ -80,7 +147,6 @@ export default function AddBookPage() {
               </CardHeader>
               <CardContent>
                 <form onSubmit={handleSubmit} className="space-y-6">
-                  {/* Title & Author */}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <Label htmlFor="title">Title *</Label>
@@ -104,7 +170,6 @@ export default function AddBookPage() {
                     </div>
                   </div>
 
-                  {/* ISBN & Category */}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <Label htmlFor="isbn">ISBN *</Label>
@@ -119,27 +184,42 @@ export default function AddBookPage() {
                     <div className="space-y-2">
                       <Label htmlFor="category">Category *</Label>
                       <Select
-                        value={formData.category}
+                        value={formData.category || undefined}
                         onValueChange={(value) => handleInputChange("category", value)}
                       >
                         <SelectTrigger>
                           <SelectValue placeholder="Select category" />
                         </SelectTrigger>
                         <SelectContent>
-                          {["Fiction","Non-Fiction","Science","History","Biography","Romance","Mystery","Fantasy","Dystopian","Children"].map((cat) => (
-                            <SelectItem key={cat} value={cat}>{cat}</SelectItem>
+                          {[
+                            "Fiction",
+                            "Non-Fiction",
+                            "Science",
+                            "History",
+                            "Biography",
+                            "Romance",
+                            "Mystery",
+                            "Fantasy",
+                            "Dystopian",
+                            "Children",
+                          ].map((cat) => (
+                            <SelectItem key={cat} value={cat}>
+                              {cat}
+                            </SelectItem>
                           ))}
                         </SelectContent>
                       </Select>
                     </div>
                   </div>
 
-                  {/* Status */}
                   <div className="space-y-2">
                     <Label htmlFor="status">Status</Label>
-                    <Select value={formData.status} onValueChange={(value) => handleInputChange("status", value)}>
+                    <Select
+                      value={formData.status || undefined}
+                      onValueChange={(value) => handleInputChange("status", value)}
+                    >
                       <SelectTrigger>
-                        <SelectValue />
+                        <SelectValue placeholder="Select status" />
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="available">Available</SelectItem>
@@ -155,13 +235,24 @@ export default function AddBookPage() {
                     </Alert>
                   )}
 
-                  {/* Submit */}
                   <div className="flex gap-4">
                     <Button type="submit" disabled={isLoading} className="flex-1">
-                      {isLoading ? <><Save className="mr-2 h-4 w-4 animate-spin" />Adding...</> : <><Save className="mr-2 h-4 w-4" />Add Book</>}
+                      {isLoading ? (
+                        <>
+                          <Save className="mr-2 h-4 w-4 animate-spin" />
+                          Adding...
+                        </>
+                      ) : (
+                        <>
+                          <Save className="mr-2 h-4 w-4" />
+                          Add Book
+                        </>
+                      )}
                     </Button>
                     <Link href="/books">
-                      <Button type="button" variant="outline">Cancel</Button>
+                      <Button type="button" variant="outline">
+                        Cancel
+                      </Button>
                     </Link>
                   </div>
                 </form>
