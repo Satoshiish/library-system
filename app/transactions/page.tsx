@@ -21,6 +21,7 @@ export default function TransactionsPage() {
     book_id: "",
     due_date: "",
   })
+  const [search, setSearch] = useState({ borrower: "", book: "", date: "" })
 
   // Fetch data
   useEffect(() => {
@@ -144,7 +145,6 @@ export default function TransactionsPage() {
       return
     }
 
-    // ✅ No duplicate check; rely on book availability
     const { error: loanError, data: loanData } = await supabase
       .from("loans")
       .insert({
@@ -190,6 +190,16 @@ export default function TransactionsPage() {
 
     toast.success("Transaction added successfully ✅")
   }
+
+  // Filter transactions based on search
+  const filteredTransactions = transactions.filter(t => {
+    const borrowerMatch = t.borrowers?.name.toLowerCase().includes(search.borrower.toLowerCase())
+    const bookMatch = t.books?.title.toLowerCase().includes(search.book.toLowerCase())
+    const dateMatch = search.date
+      ? new Date(t.due_date).toISOString().split("T")[0] === search.date
+      : true
+    return borrowerMatch && bookMatch && dateMatch
+  })
 
   return (
     <div className="flex min-h-screen bg-background">
@@ -259,10 +269,42 @@ export default function TransactionsPage() {
           </CardContent>
         </Card>
 
+        {/* Search Filters */}
+        <Card className="p-4">
+          <div className="grid gap-4 md:grid-cols-3">
+            <div className="flex flex-col gap-2">
+              <Label>Search Borrower</Label>
+              <Input
+                placeholder="Borrower name"
+                value={search.borrower}
+                onChange={e => setSearch({ ...search, borrower: e.target.value })}
+              />
+            </div>
+
+            <div className="flex flex-col gap-2">
+              <Label>Search Book</Label>
+              <Input
+                placeholder="Book title"
+                value={search.book}
+                onChange={e => setSearch({ ...search, book: e.target.value })}
+              />
+            </div>
+
+            <div className="flex flex-col gap-2">
+              <Label>Search Date</Label>
+              <Input
+                type="date"
+                value={search.date}
+                onChange={e => setSearch({ ...search, date: e.target.value })}
+              />
+            </div>
+          </div>
+        </Card>
+
         {/* Transactions Table */}
         {loading ? (
           <p>Loading...</p>
-        ) : transactions.length === 0 ? (
+        ) : filteredTransactions.length === 0 ? (
           <div className="border rounded-md p-6 text-center text-muted-foreground">
             No transactions found.
           </div>
@@ -279,7 +321,7 @@ export default function TransactionsPage() {
                 </tr>
               </thead>
               <tbody>
-                {transactions.map(t => (
+                {filteredTransactions.map(t => (
                   <tr key={t.id} className="border-t hover:bg-muted/30">
                     <td className="p-3">{t.borrowers?.name}</td>
                     <td className="p-3">{t.books?.title}</td>

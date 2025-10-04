@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
 import { toast } from "sonner"
 import { supabase } from "@/lib/supabaseClient"
-import { Plus, Edit, Archive, X } from "lucide-react"
+import { Plus, Edit, Archive } from "lucide-react"
 
 interface Patron {
   id: string
@@ -25,6 +25,7 @@ export default function PatronPage() {
   const [newPatron, setNewPatron] = useState({ full_name: "", email: "", phone: "" })
   const [editingPatron, setEditingPatron] = useState<Patron | null>(null)
   const [loading, setLoading] = useState(true)
+  const [search, setSearch] = useState({ name: "", email: "" })
 
   // Fetch patrons
   useEffect(() => {
@@ -83,6 +84,13 @@ export default function PatronPage() {
     }
   }
 
+  // Filter patrons
+  const filteredPatrons = patrons.filter(p => {
+    const nameMatch = p.full_name.toLowerCase().includes(search.name.toLowerCase())
+    const emailMatch = p.email.toLowerCase().includes(search.email.toLowerCase())
+    return nameMatch && emailMatch
+  })
+
   return (
     <div className="flex min-h-screen bg-background">
       <Sidebar />
@@ -133,10 +141,32 @@ export default function PatronPage() {
           </CardContent>
         </Card>
 
+        {/* Search Filters */}
+        <Card className="p-4">
+          <div className="grid gap-4 md:grid-cols-2">
+            <div className="flex flex-col gap-2">
+              <Label>Search by Name</Label>
+              <Input
+                placeholder="Full name"
+                value={search.name}
+                onChange={e => setSearch({ ...search, name: e.target.value })}
+              />
+            </div>
+            <div className="flex flex-col gap-2">
+              <Label>Search by Email</Label>
+              <Input
+                placeholder="Email"
+                value={search.email}
+                onChange={e => setSearch({ ...search, email: e.target.value })}
+              />
+            </div>
+          </div>
+        </Card>
+
         {/* Patrons Table */}
         {loading ? (
           <p>Loading...</p>
-        ) : patrons.length === 0 ? (
+        ) : filteredPatrons.length === 0 ? (
           <div className="border rounded-md p-6 text-center text-muted-foreground">
             No patrons found.
           </div>
@@ -154,7 +184,7 @@ export default function PatronPage() {
                 </tr>
               </thead>
               <tbody>
-                {patrons.map(p => (
+                {filteredPatrons.map(p => (
                   <tr key={p.id} className="border-t hover:bg-muted/30">
                     <td className="p-3">
                       {editingPatron?.id === p.id ? (
