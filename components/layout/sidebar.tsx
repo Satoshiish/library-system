@@ -9,6 +9,7 @@ import {
   BookOpen,
   LayoutDashboard,
   Users,
+  UserPlus,
   Plus,
   Search,
   LogOut,
@@ -22,9 +23,11 @@ const navigation = [
   { name: "Books", href: "/books", icon: BookOpen },
   { name: "Add Book", href: "/books/add", icon: Plus },
   { name: "Borrowers", href: "/borrowers", icon: Users },
-  { name: "Transactions", href: "/transactions", icon: BookCopy }, // ✅ Added properly
+  { name: "Patrons", href: "/patron", icon: UserPlus }, // ✅ Updated icon
+  { name: "Transactions", href: "/transactions", icon: BookCopy },
   { name: "Search", href: "/search", icon: Search },
 ]
+
 
 export function Sidebar() {
   const pathname = usePathname()
