@@ -33,33 +33,98 @@ export default function BooksPage() {
   const [viewingBook, setViewingBook] = useState<any | null>(null)
   const [deleteModalOpen, setDeleteModalOpen] = useState<boolean>(false)
   const [bookToDelete, setBookToDelete] = useState<any | null>(null)
+  const [deleteError, setDeleteError] = useState<string>("")
 
-  // Fetch books from Supabase
+  // ✅ IMPROVED: Fetch books with reliable user data for all user types
   const fetchBooks = async () => {
     setLoading(true)
-    let query = supabase.from("books").select("*")
+    
+    try {
+      // Try multiple join approaches
+      const joinAttempts = [
+        // Attempt 1: Standard join
+        supabase.from("books").select(`
+          *,
+          users!inner(full_name, email, role)
+        `),
+        // Attempt 2: Explicit foreign key
+        supabase.from("books").select(`
+          *,
+          users!books_added_by_fkey(full_name, email, role)
+        `),
+        // Attempt 3: Simple join (your current approach)
+        supabase.from("books").select(`
+          *,
+          added_by_user:users(full_name, email, role)
+        `)
+      ]
 
-    if (searchTerm) {
-      query = query.or(`title.ilike.%${searchTerm}%,author.ilike.%${searchTerm}%,isbn.ilike.%${searchTerm}%`)
-    }
+      let booksData = null
+      let lastError = null
 
-    if (categoryFilter !== "all") {
-      query = query.eq("category", categoryFilter)
-    }
+      // Try each join approach until one works
+      for (const attempt of joinAttempts) {
+        let query = attempt
+        
+        if (searchTerm) {
+          query = query.or(`title.ilike.%${searchTerm}%,author.ilike.%${searchTerm}%,isbn.ilike.%${searchTerm}%`)
+        }
+        if (categoryFilter !== "all") {
+          query = query.eq("category", categoryFilter)
+        }
+        if (statusFilter !== "all") {
+          query = query.eq("status", statusFilter)
+        }
 
-    if (statusFilter !== "all") {
-      query = query.eq("status", statusFilter)
-    }
+        const { data, error } = await query.order("created_at", { ascending: false })
+        
+        if (!error && data) {
+          booksData = data
+          console.log("Join successful with data:", data)
+          break
+        }
+        lastError = error
+      }
 
-    const { data, error } = await query.order("created_at", { ascending: false })
+      // If all joins failed, use manual approach
+      if (!booksData) {
+        console.log("All joins failed, using manual approach. Last error:", lastError)
+        const { data: simpleBooks, error: simpleError } = await supabase
+          .from("books")
+          .select("*")
+          .order("created_at", { ascending: false })
 
-    if (error) {
-      console.error("Failed to fetch books:", error.message)
+        if (simpleError) throw simpleError
+
+        // Manually fetch user data for each book
+        booksData = await Promise.all(
+          (simpleBooks || []).map(async (book) => {
+            if (book.added_by) {
+              try {
+                const { data: user } = await supabase
+                  .from("users")
+                  .select("full_name, email, role")
+                  .eq("id", book.added_by)
+                  .single()
+                return { ...book, added_by_user: user || null }
+              } catch (userError) {
+                console.error(`Error fetching user ${book.added_by}:`, userError)
+                return { ...book, added_by_user: null }
+              }
+            }
+            return { ...book, added_by_user: null }
+          })
+        )
+        console.log("Manual fetch completed:", booksData)
+      }
+
+      setBooks(booksData || [])
+    } catch (error) {
+      console.error("Failed to fetch books:", error)
       setBooks([])
-    } else {
-      setBooks(data || [])
+    } finally {
+      setLoading(false)
     }
-    setLoading(false)
   }
 
   useEffect(() => {
@@ -72,26 +137,63 @@ export default function BooksPage() {
   const confirmDelete = (book: any) => {
     setBookToDelete(book)
     setDeleteModalOpen(true)
+    setDeleteError("") // Clear previous errors
   }
 
-  // Delete book function
+  // ✅ DEBUGGED: Delete book function with better error handling
   const handleDelete = async () => {
     if (!bookToDelete) return
+    
     setDeletingBookId(bookToDelete.id)
+    setDeleteError("")
+    
     try {
-      const { error } = await supabase.from("books").delete().eq("id", bookToDelete.id)
+      console.log("Attempting to delete book:", bookToDelete.id, bookToDelete.title)
+      
+      // Debug: Check book ID type and value
+      console.log("Book ID type:", typeof bookToDelete.id, "Value:", bookToDelete.id)
+      
+      const { error } = await supabase
+        .from("books")
+        .delete()
+        .eq("id", bookToDelete.id)
+
       if (error) {
-        alert("Failed to delete book: " + error.message)
-      } else {
-        setBooks((prev) => prev.filter((b) => b.id !== bookToDelete.id))
+        console.error("❌ Delete error details:", error)
+        
+        // Provide more specific error messages
+        if (error.code === '23503') {
+          setDeleteError("Cannot delete book: It may be referenced by other records (loans, etc.)")
+        } else if (error.code === '42501') {
+          setDeleteError("Permission denied: You don't have rights to delete books")
+        } else {
+          setDeleteError(`Failed to delete book: ${error.message}`)
+        }
+        return
       }
-    } catch (err) {
-      alert("Failed to delete book. Please try again.")
-    } finally {
-      setDeletingBookId(null)
+
+      console.log("✅ Book deleted successfully")
+      
+      // Update UI immediately
+      setBooks((prev) => prev.filter((b) => b.id !== bookToDelete.id))
+      
+      // Close modal on success
       setDeleteModalOpen(false)
       setBookToDelete(null)
+      
+    } catch (err) {
+      console.error("❌ Unexpected error during delete:", err)
+      setDeleteError("Failed to delete book. Please try again.")
+    } finally {
+      setDeletingBookId(null)
     }
+  }
+
+  // Close delete modal
+  const closeDeleteModal = () => {
+    setDeleteModalOpen(false)
+    setBookToDelete(null)
+    setDeleteError("")
   }
 
   return (
@@ -204,7 +306,8 @@ export default function BooksPage() {
                               </Badge>
                             </div>
 
-                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 text-sm">
+                            {/* 👇 IMPROVED: Added by display with role */}
+                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 text-sm">
                               <div className="flex items-center gap-2">
                                 <Book className="h-3 w-3 text-muted-foreground flex-shrink-0" />
                                 <span className="text-muted-foreground">ISBN:</span>
@@ -218,6 +321,20 @@ export default function BooksPage() {
                                 <Calendar className="h-3 w-3 text-muted-foreground flex-shrink-0" />
                                 <span className="text-muted-foreground">Added:</span>
                                 <span>{new Date(book.created_at).toLocaleDateString()}</span>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <User className="h-3 w-3 text-muted-foreground flex-shrink-0" />
+                                <span className="text-muted-foreground">Added by:</span>
+                                <div className="flex items-center gap-1">
+                                  <span className="font-medium text-sm">
+                                    {book.added_by_user?.email || book.users?.email || "Unknown"}
+                                  </span>
+                                  {(book.added_by_user?.role || book.users?.role) && (
+                                    <Badge variant="outline" className="text-xs capitalize">
+                                      {book.added_by_user?.role || book.users?.role}
+                                    </Badge>
+                                  )}
+                                </div>
                               </div>
                             </div>
 
@@ -263,32 +380,6 @@ export default function BooksPage() {
           </div>
         </main>
 
-        {/* Delete Modal */}
-        {deleteModalOpen && bookToDelete && (
-          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-            <div className="bg-background p-6 rounded-lg w-96 relative">
-              <button
-                className="absolute top-2 right-2 text-muted-foreground"
-                onClick={() => setDeleteModalOpen(false)}
-              >
-                <X className="h-5 w-5" />
-              </button>
-              <h3 className="text-lg font-semibold mb-4">Delete Book</h3>
-              <p>Are you sure you want to delete <strong>{bookToDelete.title}</strong>?</p>
-              <div className="flex justify-end gap-2 mt-4">
-                <Button variant="outline" onClick={() => setDeleteModalOpen(false)}>Cancel</Button>
-                <Button
-                  className="bg-destructive hover:bg-red-700 text-white"
-                  onClick={handleDelete}
-                  disabled={deletingBookId === bookToDelete.id}
-                >
-                  {deletingBookId === bookToDelete.id ? <Loader2 className="h-4 w-4 animate-spin" /> : "Delete"}
-                </Button>
-              </div>
-            </div>
-          </div>
-        )}
-
         {/* View Details Modal */}
         {viewingBook && (
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
@@ -306,9 +397,69 @@ export default function BooksPage() {
                 <p><strong>Category:</strong> {viewingBook.category}</p>
                 <p><strong>Status:</strong> {viewingBook.status.replace("_", " ").toUpperCase()}</p>
                 <p><strong>Added:</strong> {new Date(viewingBook.created_at).toLocaleDateString()}</p>
+                <p>
+                  <strong>Added by:</strong> {viewingBook.added_by_user?.email || viewingBook.users?.email || "Unknown"}
+                  {(viewingBook.added_by_user?.role || viewingBook.users?.role) && (
+                    <Badge variant="outline" className="ml-2 text-xs capitalize">
+                      {viewingBook.added_by_user?.role || viewingBook.users?.role}
+                    </Badge>
+                  )}
+                </p>
               </div>
               <div className="flex justify-end mt-4">
                 <Button onClick={() => setViewingBook(null)}>Close</Button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Delete Confirmation Modal */}
+        {deleteModalOpen && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+            <div className="bg-background p-6 rounded-lg w-96 relative">
+              <button
+                className="absolute top-2 right-2 text-muted-foreground"
+                onClick={closeDeleteModal}
+              >
+                <X className="h-5 w-5" />
+              </button>
+              <h3 className="text-lg font-semibold mb-2">Delete Book</h3>
+              <p className="text-sm text-muted-foreground mb-4">
+                Are you sure you want to delete "<strong>{bookToDelete?.title}</strong>" by {bookToDelete?.author}?
+                This action cannot be undone.
+              </p>
+              
+              {deleteError && (
+                <div className="bg-destructive/10 border border-destructive/20 rounded p-3 mb-4">
+                  <p className="text-destructive text-sm">{deleteError}</p>
+                </div>
+              )}
+
+              <div className="flex justify-end gap-3">
+                <Button 
+                  variant="outline" 
+                  onClick={closeDeleteModal}
+                  disabled={deletingBookId !== null}
+                >
+                  Cancel
+                </Button>
+                <Button 
+                  variant="destructive" 
+                  onClick={handleDelete}
+                  disabled={deletingBookId !== null}
+                >
+                  {deletingBookId ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Deleting...
+                    </>
+                  ) : (
+                    <>
+                      <Trash2 className="mr-2 h-4 w-4" />
+                      Delete Book
+                    </>
+                  )}
+                </Button>
               </div>
             </div>
           </div>

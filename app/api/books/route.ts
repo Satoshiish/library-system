@@ -1,3 +1,4 @@
+// app/api/books/route.ts
 import { type NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
@@ -13,8 +14,13 @@ export async function GET(request: NextRequest) {
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
     );
 
-    // Start query
-    let query = supabase.from("books").select("*");
+    // Start query - include user who added the book
+    let query = supabase
+      .from("books")
+      .select(`
+        *,
+        added_by_user:users(full_name, email)
+      `);
 
     // Apply search filter
     if (search) {
@@ -48,13 +54,30 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const bookData = await request.json();
+    
+    // Get user ID from the request (you'll need to implement proper auth context)
+    // For now, we'll use a header or default to admin user
+    const userId = request.headers.get('x-user-id') || await getDefaultAdminId();
 
     const supabase = createClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
     );
 
-    const { data, error } = await supabase.from("books").insert([bookData]).select().single();
+    // Add the user who is creating the book
+    const bookWithAddedBy = {
+      ...bookData,
+      added_by: userId
+    };
+
+    const { data, error } = await supabase
+      .from("books")
+      .insert([bookWithAddedBy])
+      .select(`
+        *,
+        added_by_user:users(full_name, email)
+      `)
+      .single();
 
     if (error) {
       console.error("Database error:", error.message);
@@ -66,4 +89,24 @@ export async function POST(request: NextRequest) {
     console.error("API error:", error);
     return NextResponse.json({ success: false, error: "Failed to create book" }, { status: 500 });
   }
+}
+
+// Helper function to get default admin user ID
+async function getDefaultAdminId(): Promise<string> {
+  const supabase = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  );
+
+  const { data: user, error } = await supabase
+    .from("users")
+    .select("id")
+    .eq("email", "admin@library.com")
+    .single();
+
+  if (error || !user) {
+    throw new Error("Default admin user not found");
+  }
+
+  return user.id;
 }

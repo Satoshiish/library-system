@@ -1,3 +1,4 @@
+// app/api/auth/login/route.ts
 import { type NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
@@ -30,6 +31,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, error: "User is inactive" }, { status: 403 });
     }
 
+    // TODO: Implement proper password hashing later
+    // For now, compare plain text passwords
     if (user.password !== password) {
       return NextResponse.json({ success: false, error: "Invalid credentials" }, { status: 401 });
     }

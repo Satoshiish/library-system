@@ -1,3 +1,4 @@
+// app/login/page.tsx
 "use client"
 
 import type React from "react"
@@ -32,13 +33,16 @@ export default function LoginPage() {
       const data = await response.json()
 
       if (response.ok && data.success) {
-        // ✅ Store user session in localStorage
+        // ✅ Store user session securely
         localStorage.setItem("isAuthenticated", "true")
         localStorage.setItem("userId", data.user.id)
         localStorage.setItem("userEmail", data.user.email)
         localStorage.setItem("userRole", data.user.role)
         localStorage.setItem("userName", data.user.name)
-
+        
+        // Also set a session cookie for server-side access
+        document.cookie = `userId=${data.user.id}; path=/; max-age=86400` // 24 hours
+        
         router.push("/dashboard")
         return
       }

@@ -12,13 +12,18 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { ArrowLeft, Save } from "lucide-react"
 import Link from "next/link"
-import { supabase } from "@/lib/supabaseClient"  // ✅ centralized client
+import { createClient } from "@supabase/supabase-js"
+
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+)
 
 export default function AddBookPage() {
   const router = useRouter()
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState("")
-  const [user, setUser] = useState<any>(null)
+  const [currentUser, setCurrentUser] = useState<any>(null)
 
   const [formData, setFormData] = useState({
     title: "",
@@ -28,23 +33,25 @@ export default function AddBookPage() {
     status: "available",
   })
 
-  // ✅ Load authenticated user on mount
+  // ✅ Load authenticated user from localStorage (your custom auth system)
   useEffect(() => {
-    const loadUser = async () => {
-      const {
-        data: { session },
-        error: sessionError,
-      } = await supabase.auth.getSession()
+    const loadUser = () => {
+      if (typeof window !== "undefined") {
+        const userId = localStorage.getItem("userId")
+        const userEmail = localStorage.getItem("userEmail")
+        const userName = localStorage.getItem("userName")
+        const userRole = localStorage.getItem("userRole")
 
-      if (sessionError) {
-        console.error("❌ Session error:", sessionError)
-        return
-      }
-
-      if (session?.user) {
-        setUser(session.user)
-      } else {
-        console.warn("⚠️ No active session found")
+        if (userId) {
+          setCurrentUser({
+            id: parseInt(userId),
+            email: userEmail,
+            name: userName,
+            role: userRole
+          })
+        } else {
+          console.warn("⚠️ No user found in localStorage")
+        }
       }
     }
 
@@ -61,58 +68,73 @@ export default function AddBookPage() {
     setError("")
 
     try {
-      // ✅ Recheck session before inserting
-      let currentUser = user
-      if (!currentUser) {
-        const {
-          data: { session },
-        } = await supabase.auth.getSession()
-        currentUser = session?.user || null
-        setUser(currentUser)
+      // ✅ Get current user from localStorage (fallback)
+      let userId = currentUser?.id
+      let userEmail = currentUser?.email
+
+      if (!userId && typeof window !== "undefined") {
+        userId = parseInt(localStorage.getItem("userId") || "0")
+        userEmail = localStorage.getItem("userEmail") || "Unknown"
       }
 
-      // 1️⃣ Insert the book
+      if (!userId || userId === 0) {
+        setError("User not authenticated. Please log in again.")
+        setIsLoading(false)
+        return
+      }
+
+      // ✅ Prepare book data with added_by field
+      const bookData = {
+        ...formData,
+        added_by: userId // This is crucial for tracking who added the book
+      }
+
+      console.log("Adding book with data:", bookData)
+
+      // ✅ Insert the book with added_by field
       const { data: newBook, error: bookError } = await supabase
         .from("books")
-        .insert([formData])
+        .insert([bookData])
         .select()
         .single()
 
       if (bookError) {
         console.error("❌ Book insert error:", bookError)
-        setError("Failed to add book. Please try again.")
+        setError(`Failed to add book: ${bookError.message}`)
         return
       }
 
-      // 2️⃣ Insert audit log if user is available
-      if (currentUser) {
+      console.log("✅ Book added successfully:", newBook)
+
+      // ✅ Optional: Create audit log entry
+      try {
         const logEntry = {
-          user_id: currentUser.id,
-          user_name: currentUser.user_metadata?.full_name || currentUser.email,
-          action: "Added Book",
-          entity: "books",
-          entity_id: newBook.id,
-          metadata: JSON.stringify({
-            title: newBook.title,
-            author: newBook.author,
-            isbn: newBook.isbn,
-          }),
-          created_at: new Date().toISOString(),
+          action: 'CREATE_BOOK',
+          table_name: 'books',
+          record_id: newBook.id,
+          user_id: userId,
+          old_data: null,
+          new_data: newBook,
+          created_at: new Date().toISOString()
         }
 
-        const { error: logError } = await supabase.from("audit_logs").insert([logEntry])
+        const { error: logError } = await supabase
+          .from("audit_logs")
+          .insert([logEntry])
 
         if (logError) {
           console.error("❌ Audit log insert error:", logError)
         } else {
-          console.log("✅ Audit log recorded:", logEntry)
+          console.log("✅ Audit log recorded")
         }
-      } else {
-        console.warn("⚠️ No user found — audit log skipped")
+      } catch (logError) {
+        console.error("❌ Audit log failed:", logError)
+        // Don't fail the whole operation if audit logging fails
       }
 
       // ✅ Redirect after success
       router.push("/books")
+      
     } catch (err) {
       console.error("❌ Unexpected error:", err)
       setError("Failed to add book. Please try again.")
@@ -136,7 +158,9 @@ export default function AddBookPage() {
               </Link>
               <div>
                 <h1 className="text-3xl font-bold text-foreground">Add New Book</h1>
-                <p className="text-muted-foreground">Enter details for a new book</p>
+                <p className="text-muted-foreground">
+                  {currentUser ? `Adding as: ${currentUser.email} (${currentUser.role})` : "Enter details for a new book"}
+                </p>
               </div>
             </div>
 
