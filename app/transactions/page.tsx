@@ -20,7 +20,7 @@ interface Transaction {
   returned_date: string | null
   created_at: string
   loan_date: string
-  patron_id: string
+  pattern_id: string  // Changed from patron_id to pattern_id
   book_id: string
   borrowers?: {
     id: string
@@ -41,7 +41,7 @@ export default function TransactionsPage() {
   const [books, setBooks] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [newLoan, setNewLoan] = useState({
-    patron_id: "",
+    pattern_id: "",  // Changed from patron_id to pattern_id
     book_id: "",
     due_date: "",
   })
@@ -59,7 +59,10 @@ export default function TransactionsPage() {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        // Fetch loans with borrower and book data
+        // First, let's debug the actual data structure
+        console.log("🔍 Fetching loans data...")
+        
+        // Fetch loans with proper column name (pattern_id instead of patron_id)
         const { data: loansData, error: loansError } = await supabase
           .from("loans")
           .select(`
@@ -69,7 +72,7 @@ export default function TransactionsPage() {
             returned_date,
             created_at,
             loan_date,
-            patron_id,
+            pattern_id,  // Changed to pattern_id
             book_id,
             borrowers ( id, name, email ),
             books ( id, title, author, isbn )
@@ -78,18 +81,21 @@ export default function TransactionsPage() {
 
         if (loansError) {
           console.error("❌ Loans error:", loansError)
-          // Try without joins first to debug
+          // Try a simpler query to see what's available
           const { data: simpleLoans, error: simpleError } = await supabase
             .from("loans")
             .select("*")
             .order("created_at", { ascending: false })
+            .limit(5)
           
           if (simpleError) {
             console.error("❌ Simple loans error:", simpleError)
           } else {
+            console.log("📋 Simple loans data:", simpleLoans)
             setTransactions(simpleLoans || [])
           }
         } else {
+          console.log("✅ Loans data with joins:", loansData)
           setTransactions(loansData || [])
         }
 
@@ -97,23 +103,24 @@ export default function TransactionsPage() {
         const { data: borrowersData, error: borrowersError } = await supabase
           .from("borrowers")
           .select("id, name, email, status")
-          .eq("status", "active")
 
         if (borrowersError) {
           console.error("❌ Borrowers error:", borrowersError)
         } else {
+          console.log("👥 Borrowers data:", borrowersData)
           setBorrowers(borrowersData || [])
         }
 
         // Fetch available books
         const { data: booksData, error: booksError } = await supabase
           .from("books")
-          .select("id, title, author")
+          .select("id, title, author, isbn")
           .eq("status", "available")
 
         if (booksError) {
           console.error("❌ Books error:", booksError)
         } else {
+          console.log("📚 Available books:", booksData)
           setBooks(booksData || [])
         }
 
@@ -126,6 +133,35 @@ export default function TransactionsPage() {
 
     fetchData()
   }, [])
+
+  // Debug function to check data relationships
+  const debugDataRelationships = async () => {
+    console.log("🔍 Debugging data relationships...")
+    
+    // Check if loans have valid pattern_ids that exist in borrowers
+    const { data: allLoans } = await supabase
+      .from("loans")
+      .select("pattern_id, book_id")
+      .limit(10)
+    
+    console.log("📋 Sample loans with pattern_ids:", allLoans)
+    
+    // Check borrowers
+    const { data: allBorrowers } = await supabase
+      .from("borrowers")
+      .select("id, name")
+      .limit(10)
+    
+    console.log("👥 Sample borrowers:", allBorrowers)
+    
+    // Check books
+    const { data: allBooks } = await supabase
+      .from("books")
+      .select("id, title")
+      .limit(10)
+    
+    console.log("📚 Sample books:", allBooks)
+  }
 
   // Mark transaction as active
   const markAsActive = async (loanId: string) => {
@@ -214,7 +250,7 @@ export default function TransactionsPage() {
   // Add new transaction
   const handleAddTransaction = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!newLoan.patron_id || !newLoan.book_id || !newLoan.due_date) {
+    if (!newLoan.pattern_id || !newLoan.book_id || !newLoan.due_date) {
       toast.error("Please fill in all fields")
       return
     }
@@ -223,7 +259,7 @@ export default function TransactionsPage() {
       const { error: loanError, data: loanData } = await supabase
         .from("loans")
         .insert({
-          patron_id: newLoan.patron_id,
+          pattern_id: newLoan.pattern_id,  // Changed to pattern_id
           book_id: newLoan.book_id,
           due_date: newLoan.due_date,
           loan_date: new Date().toISOString(),
@@ -258,7 +294,7 @@ export default function TransactionsPage() {
           returned_date,
           created_at,
           loan_date,
-          patron_id,
+          pattern_id,  // Changed to pattern_id
           book_id,
           borrowers ( id, name, email ),
           books ( id, title, author, isbn )
@@ -273,7 +309,7 @@ export default function TransactionsPage() {
         setTransactions(prev => [loanData, ...prev])
       }
 
-      setNewLoan({ patron_id: "", book_id: "", due_date: "" })
+      setNewLoan({ pattern_id: "", book_id: "", due_date: "" })
 
       // Refresh available books dropdown
       const { data: refreshedBooks } = await supabase
@@ -369,7 +405,12 @@ export default function TransactionsPage() {
       <Sidebar />
 
       <main className="flex-1 lg:ml-64 p-6 space-y-8">
-        <h1 className="text-3xl font-bold">Transactions</h1>
+        <div className="flex justify-between items-center">
+          <h1 className="text-3xl font-bold">Transactions</h1>
+          <Button variant="outline" onClick={debugDataRelationships}>
+            Debug Data
+          </Button>
+        </div>
 
         <Tabs defaultValue="active" className="space-y-6">
           <TabsList className="grid w-full grid-cols-2 lg:grid-cols-3">
@@ -389,8 +430,8 @@ export default function TransactionsPage() {
                   <div className="flex flex-col gap-2">
                     <Label>Borrower</Label>
                     <Select
-                      value={newLoan.patron_id}
-                      onValueChange={val => setNewLoan({ ...newLoan, patron_id: val })}
+                      value={newLoan.pattern_id}
+                      onValueChange={val => setNewLoan({ ...newLoan, pattern_id: val })}
                     >
                       <SelectTrigger>
                         <SelectValue placeholder="Select borrower" />
@@ -498,8 +539,8 @@ export default function TransactionsPage() {
                   <tbody>
                     {filteredTransactions.map(t => (
                       <tr key={t.id} className="border-t hover:bg-muted/30">
-                        <td className="p-3">{t.borrowers?.name || "Unknown"}</td>
-                        <td className="p-3">{t.books?.title || "Unknown Book"}</td>
+                        <td className="p-3">{t.borrowers?.name || `Unknown (ID: ${t.pattern_id})`}</td>
+                        <td className="p-3">{t.books?.title || `Unknown Book (ID: ${t.book_id})`}</td>
                         <td className="p-3">
                           <div className="flex items-center gap-1">
                             <Calendar className="h-3 w-3 text-muted-foreground" />
@@ -653,13 +694,13 @@ export default function TransactionsPage() {
                         <td className="p-3">
                           <div className="flex items-center gap-1">
                             <User className="h-3 w-3 text-muted-foreground" />
-                            {t.borrowers?.name || "Unknown"}
+                            {t.borrowers?.name || `Unknown (ID: ${t.pattern_id})`}
                           </div>
                         </td>
                         <td className="p-3">
                           <div className="flex items-center gap-1">
                             <Book className="h-3 w-3 text-muted-foreground" />
-                            {t.books?.title || "Unknown Book"}
+                            {t.books?.title || `Unknown Book (ID: ${t.book_id})`}
                           </div>
                         </td>
                         <td className="p-3">
