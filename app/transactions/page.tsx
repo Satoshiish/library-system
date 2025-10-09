@@ -11,7 +11,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { toast } from "sonner"
-import { Search, Calendar, User, Book, ArrowUpDown } from "lucide-react"
+import { Search, Calendar, User, Book, ArrowUpDown, AlertTriangle, Clock } from "lucide-react"
 
 interface Transaction {
   id: string
@@ -53,7 +53,7 @@ export default function TransactionsPage() {
     date_to: "",
     status: "all"
   })
-  const [sortConfig, setSortConfig] = useState({ key: "due_date", direction: "desc" })
+  const [sortConfig, setSortConfig] = useState({ key: "due_date", direction: "asc" }) // Default sort by due date ascending
 
   // Fetch data with proper error handling
   useEffect(() => {
@@ -144,6 +144,54 @@ export default function TransactionsPage() {
     fetchData()
   }, [])
 
+  // Function to check if a transaction is overdue
+  const isOverdue = (transaction: Transaction): boolean => {
+    // If already returned, not overdue
+    if (transaction.status === "returned" || transaction.returned_date) {
+      return false
+    }
+    
+    // Compare due date with current date
+    const dueDate = new Date(transaction.due_date)
+    const today = new Date()
+    
+    // Set both dates to start of day for accurate comparison
+    dueDate.setHours(0, 0, 0, 0)
+    today.setHours(0, 0, 0, 0)
+    
+    return dueDate < today
+  }
+
+  // Function to calculate days overdue
+  const getDaysOverdue = (transaction: Transaction): number => {
+    if (!isOverdue(transaction)) return 0
+    
+    const dueDate = new Date(transaction.due_date)
+    const today = new Date()
+    
+    // Calculate difference in days
+    const diffTime = today.getTime() - dueDate.getTime()
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
+    
+    return Math.max(0, diffDays)
+  }
+
+  // Function to get overdue status text
+  const getOverdueStatus = (transaction: Transaction): string => {
+    if (!isOverdue(transaction)) return ""
+    
+    const daysOverdue = getDaysOverdue(transaction)
+    if (daysOverdue === 1) return "1 day overdue"
+    return `${daysOverdue} days overdue`
+  }
+
+  // Function to get overdue badge variant based on severity
+  const getOverdueSeverity = (transaction: Transaction): "warning" | "destructive" => {
+    const daysOverdue = getDaysOverdue(transaction)
+    if (daysOverdue <= 7) return "warning"
+    return "destructive"
+  }
+
   // Function to manually link data when joins fail
   const getEnhancedTransactions = () => {
     return transactions.map(transaction => {
@@ -198,6 +246,11 @@ export default function TransactionsPage() {
     return `Book #${transaction.book_id?.substring(0, 8)}...`
   }
 
+  // Get all overdue transactions
+  const getOverdueTransactions = () => {
+    return enhancedTransactions.filter(transaction => isOverdue(transaction))
+  }
+
   // Debug function to check data relationships
   const debugDataRelationships = async () => {
     try {
@@ -206,7 +259,7 @@ export default function TransactionsPage() {
       // Get sample data to check relationships
       const { data: sampleLoans, error: loansError } = await supabase
         .from("loans")
-        .select("id, patron_id, book_id")
+        .select("id, patron_id, book_id, due_date, status")
         .limit(5)
 
       if (loansError) throw loansError
@@ -310,6 +363,22 @@ export default function TransactionsPage() {
     }
   }
 
+  // Send overdue reminder (placeholder function)
+  const sendOverdueReminder = async (transaction: Transaction) => {
+    try {
+      // In a real app, this would integrate with an email service
+      console.log(`Sending overdue reminder for transaction: ${transaction.id}`)
+      
+      // Simulate API call
+      await new Promise(resolve => setTimeout(resolve, 1000))
+      
+      toast.success(`Reminder sent to ${getBorrowerName(transaction)} about "${getBookTitle(transaction)}"`)
+    } catch (error) {
+      console.error("❌ Error sending reminder:", error)
+      toast.error("Failed to send reminder")
+    }
+  }
+
   // Add new transaction
   const handleAddTransaction = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -376,6 +445,9 @@ export default function TransactionsPage() {
   // Use enhanced transactions for display
   const enhancedTransactions = getEnhancedTransactions()
 
+  // Get overdue transactions
+  const overdueTransactions = getOverdueTransactions()
+
   // Filter active transactions based on search
   const filteredTransactions = enhancedTransactions.filter(t => {
     const borrowerName = getBorrowerName(t).toLowerCase()
@@ -441,14 +513,8 @@ export default function TransactionsPage() {
       case "returned": return "success"
       case "active": return "secondary"
       case "borrowed": return "warning"
-      case "overdue": return "destructive"
       default: return "outline"
     }
-  }
-
-  // Check if a loan is overdue
-  const isOverdue = (dueDate: string, status: string) => {
-    return status !== "returned" && new Date(dueDate) < new Date()
   }
 
   return (
@@ -463,9 +529,41 @@ export default function TransactionsPage() {
           </Button>
         </div>
 
+        {/* Overdue Items Alert Banner */}
+        {overdueTransactions.length > 0 && (
+          <Card className="border-red-200 bg-red-50">
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <AlertTriangle className="h-5 w-5 text-red-600" />
+                  <div>
+                    <h3 className="font-semibold text-red-900">
+                      {overdueTransactions.length} Overdue Item{overdueTransactions.length !== 1 ? 's' : ''}
+                    </h3>
+                    <p className="text-sm text-red-700">
+                      {overdueTransactions.length} item{overdueTransactions.length !== 1 ? 's' : ''} past due date. Please follow up with borrowers.
+                    </p>
+                  </div>
+                </div>
+                <Badge variant="destructive" className="text-sm">
+                  Attention Required
+                </Badge>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
         <Tabs defaultValue="active" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-2 lg:grid-cols-3">
+          <TabsList className="grid w-full grid-cols-2 lg:grid-cols-4">
             <TabsTrigger value="active">Active Transactions</TabsTrigger>
+            <TabsTrigger value="overdue">
+              Overdue Items
+              {overdueTransactions.length > 0 && (
+                <Badge variant="destructive" className="ml-2 h-5 w-5 rounded-full p-0 text-xs">
+                  {overdueTransactions.length}
+                </Badge>
+              )}
+            </TabsTrigger>
             <TabsTrigger value="history">Transaction History</TabsTrigger>
             <TabsTrigger value="new">New Transaction</TabsTrigger>
           </TabsList>
@@ -591,24 +689,41 @@ export default function TransactionsPage() {
                   </thead>
                   <tbody>
                     {filteredTransactions.map(t => (
-                      <tr key={t.id} className="border-t hover:bg-muted/30">
-                        <td className="p-3 font-medium">{getBorrowerName(t)}</td>
+                      <tr 
+                        key={t.id} 
+                        className={`border-t hover:bg-muted/30 ${
+                          isOverdue(t) ? 'bg-red-50 hover:bg-red-100' : ''
+                        }`}
+                      >
+                        <td className="p-3 font-medium">
+                          <div className="flex items-center gap-2">
+                            {isOverdue(t) && <AlertTriangle className="h-4 w-4 text-red-500" />}
+                            {getBorrowerName(t)}
+                          </div>
+                        </td>
                         <td className="p-3">{getBookTitle(t)}</td>
                         <td className="p-3">
                           <div className="flex items-center gap-1">
                             <Calendar className="h-3 w-3 text-muted-foreground" />
                             {new Date(t.due_date).toLocaleDateString()}
-                            {isOverdue(t.due_date, t.status) && (
-                              <Badge variant="destructive" className="ml-2 text-xs">
-                                Overdue
+                            {isOverdue(t) && (
+                              <Badge variant={getOverdueSeverity(t)} className="ml-2 text-xs">
+                                {getOverdueStatus(t)}
                               </Badge>
                             )}
                           </div>
                         </td>
                         <td className="p-3">
-                          <Badge variant={getStatusVariant(t.status)}>
-                            {t.status}
-                          </Badge>
+                          <div className="flex flex-col gap-1">
+                            <Badge variant={getStatusVariant(t.status)}>
+                              {t.status}
+                            </Badge>
+                            {isOverdue(t) && (
+                              <Badge variant="destructive" className="text-xs">
+                                Overdue
+                              </Badge>
+                            )}
+                          </div>
                         </td>
                         <td className="p-3 text-right flex gap-2 justify-end">
                           {t.status === "borrowed" && (
@@ -621,12 +736,137 @@ export default function TransactionsPage() {
                               Mark as Returned
                             </Button>
                           )}
+                          {isOverdue(t) && (
+                            <Button 
+                              size="sm" 
+                              variant="destructive" 
+                              onClick={() => sendOverdueReminder(t)}
+                            >
+                              Send Reminder
+                            </Button>
+                          )}
                         </td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
               </div>
+            )}
+          </TabsContent>
+
+          {/* Overdue Items Tab */}
+          <TabsContent value="overdue" className="space-y-6">
+            {loading ? (
+              <div className="flex justify-center items-center p-8">
+                <p>Loading overdue items...</p>
+              </div>
+            ) : overdueTransactions.length === 0 ? (
+              <Card>
+                <CardContent className="p-8 text-center">
+                  <Clock className="h-12 w-12 text-green-500 mx-auto mb-4" />
+                  <h3 className="text-lg font-semibold mb-2">No Overdue Items</h3>
+                  <p className="text-muted-foreground">
+                    Great! All items have been returned on time or are not yet due.
+                  </p>
+                </CardContent>
+              </Card>
+            ) : (
+              <>
+                {/* Overdue Summary */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2 text-red-600">
+                      <AlertTriangle className="h-5 w-5" />
+                      Overdue Items Summary
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <div className="text-center p-4 border rounded-lg">
+                        <div className="text-2xl font-bold text-red-600">
+                          {overdueTransactions.length}
+                        </div>
+                        <div className="text-sm text-muted-foreground">Total Overdue</div>
+                      </div>
+                      <div className="text-center p-4 border rounded-lg">
+                        <div className="text-2xl font-bold text-orange-600">
+                          {overdueTransactions.filter(t => getDaysOverdue(t) <= 7).length}
+                        </div>
+                        <div className="text-sm text-muted-foreground">1-7 Days Overdue</div>
+                      </div>
+                      <div className="text-center p-4 border rounded-lg">
+                        <div className="text-2xl font-bold text-red-700">
+                          {overdueTransactions.filter(t => getDaysOverdue(t) > 7).length}
+                        </div>
+                        <div className="text-sm text-muted-foreground">8+ Days Overdue</div>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {/* Overdue Items Table */}
+                <div className="overflow-x-auto rounded-md border border-red-200">
+                  <table className="w-full text-sm">
+                    <thead className="bg-red-50">
+                      <tr className="text-left">
+                        <th className="p-3">Borrower</th>
+                        <th className="p-3">Book</th>
+                        <th className="p-3">Due Date</th>
+                        <th className="p-3">Days Overdue</th>
+                        <th className="p-3">Status</th>
+                        <th className="p-3 text-right">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {overdueTransactions
+                        .sort((a, b) => getDaysOverdue(b) - getDaysOverdue(a)) // Sort by most overdue first
+                        .map(t => (
+                        <tr key={t.id} className="border-t border-red-100 bg-red-50 hover:bg-red-100">
+                          <td className="p-3 font-medium">
+                            <div className="flex items-center gap-2">
+                              <AlertTriangle className="h-4 w-4 text-red-500" />
+                              {getBorrowerName(t)}
+                            </div>
+                          </td>
+                          <td className="p-3">{getBookTitle(t)}</td>
+                          <td className="p-3">
+                            <div className="flex items-center gap-1 text-red-700">
+                              <Calendar className="h-3 w-3" />
+                              {new Date(t.due_date).toLocaleDateString()}
+                            </div>
+                          </td>
+                          <td className="p-3">
+                            <Badge variant={getOverdueSeverity(t)}>
+                              {getDaysOverdue(t)} day{getDaysOverdue(t) !== 1 ? 's' : ''} overdue
+                            </Badge>
+                          </td>
+                          <td className="p-3">
+                            <Badge variant={getStatusVariant(t.status)}>
+                              {t.status}
+                            </Badge>
+                          </td>
+                          <td className="p-3 text-right flex gap-2 justify-end">
+                            <Button 
+                              size="sm" 
+                              variant="outline" 
+                              onClick={() => markAsReturned(t.id)}
+                            >
+                              Mark Returned
+                            </Button>
+                            <Button 
+                              size="sm" 
+                              variant="destructive" 
+                              onClick={() => sendOverdueReminder(t)}
+                            >
+                              Send Reminder
+                            </Button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </>
             )}
           </TabsContent>
 
@@ -685,6 +925,7 @@ export default function TransactionsPage() {
                       <SelectItem value="borrowed">Borrowed</SelectItem>
                       <SelectItem value="active">Active</SelectItem>
                       <SelectItem value="returned">Returned</SelectItem>
+                      <SelectItem value="overdue">Overdue</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -739,7 +980,12 @@ export default function TransactionsPage() {
                   </thead>
                   <tbody>
                     {filteredHistory.map(t => (
-                      <tr key={t.id} className="border-t hover:bg-muted/30">
+                      <tr 
+                        key={t.id} 
+                        className={`border-t hover:bg-muted/30 ${
+                          isOverdue(t) ? 'bg-red-50 hover:bg-red-100' : ''
+                        }`}
+                      >
                         <td className="p-3">
                           <div className="flex items-center gap-1 text-muted-foreground">
                             <Calendar className="h-3 w-3" />
@@ -772,10 +1018,16 @@ export default function TransactionsPage() {
                           )}
                         </td>
                         <td className="p-3">
-                          <Badge variant={getStatusVariant(t.status)}>
-                            {t.status}
-                            {isOverdue(t.due_date, t.status) && " (Overdue)"}
-                          </Badge>
+                          <div className="flex flex-col gap-1">
+                            <Badge variant={getStatusVariant(t.status)}>
+                              {t.status}
+                            </Badge>
+                            {isOverdue(t) && (
+                              <Badge variant="destructive" className="text-xs">
+                                Overdue ({getDaysOverdue(t)} days)
+                              </Badge>
+                            )}
+                          </div>
                         </td>
                       </tr>
                     ))}
@@ -812,7 +1064,7 @@ export default function TransactionsPage() {
                     </div>
                     <div className="text-center">
                       <div className="text-2xl font-bold text-red-600">
-                        {filteredHistory.filter(t => isOverdue(t.due_date, t.status)).length}
+                        {filteredHistory.filter(t => isOverdue(t)).length}
                       </div>
                       <div className="text-muted-foreground">Overdue</div>
                     </div>
