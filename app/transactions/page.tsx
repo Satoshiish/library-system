@@ -13,19 +13,41 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { toast } from "sonner"
 import { Search, Calendar, User, Book, ArrowUpDown } from "lucide-react"
 
+interface Transaction {
+  id: string
+  status: string
+  due_date: string
+  returned_date: string | null
+  created_at: string
+  loan_date: string
+  patron_id: string
+  book_id: string
+  patrons?: {
+    id: string
+    full_name: string
+    email: string
+  }
+  books?: {
+    id: string
+    title: string
+    author: string
+    isbn: string
+  }
+}
+
 export default function TransactionsPage() {
-  const [transactions, setTransactions] = useState<any[]>([])
-  const [borrowers, setBorrowers] = useState<any[]>([])
+  const [transactions, setTransactions] = useState<Transaction[]>([])
+  const [patrons, setPatrons] = useState<any[]>([])
   const [books, setBooks] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [newLoan, setNewLoan] = useState({
-    borrower_id: "",
+    patron_id: "",
     book_id: "",
     due_date: "",
   })
-  const [search, setSearch] = useState({ borrower: "", book: "", date: "" })
+  const [search, setSearch] = useState({ patron: "", book: "", date: "" })
   const [historySearch, setHistorySearch] = useState({ 
-    borrower: "", 
+    patron: "", 
     book: "", 
     date_from: "", 
     date_to: "",
@@ -36,189 +58,257 @@ export default function TransactionsPage() {
   // Fetch data
   useEffect(() => {
     const fetchData = async () => {
-      const [loansRes, borrowersRes, booksRes] = await Promise.all([
-        supabase.from("loans").select(`
-          id,
-          status,
-          due_date,
-          returned_at,
-          created_at,
-          borrowers ( id, name, email ),
-          books ( id, title, isbn )
-        `).order("created_at", { ascending: false }),
-        supabase.from("borrowers").select("id, name"),
-        supabase.from("books").select("id, title").eq("status", "available")
-      ])
+      try {
+        // Fetch loans with patron and book data
+        const { data: loansData, error: loansError } = await supabase
+          .from("loans")
+          .select(`
+            id,
+            status,
+            due_date,
+            returned_date,
+            created_at,
+            loan_date,
+            patron_id,
+            book_id,
+            patrons ( id, full_name, email ),
+            books ( id, title, author, isbn )
+          `)
+          .order("created_at", { ascending: false })
 
-      if (loansRes.error) console.error("❌ Loans error:", loansRes.error)
-      else setTransactions(loansRes.data || [])
+        if (loansError) {
+          console.error("❌ Loans error:", loansError)
+          // Try without joins first to debug
+          const { data: simpleLoans, error: simpleError } = await supabase
+            .from("loans")
+            .select("*")
+            .order("created_at", { ascending: false })
+          
+          if (simpleError) {
+            console.error("❌ Simple loans error:", simpleError)
+          } else {
+            setTransactions(simpleLoans || [])
+          }
+        } else {
+          setTransactions(loansData || [])
+        }
 
-      if (borrowersRes.error) console.error("❌ Borrowers error:", borrowersRes.error)
-      else setBorrowers(borrowersRes.data || [])
+        // Fetch patrons
+        const { data: patronsData, error: patronsError } = await supabase
+          .from("patrons")
+          .select("id, full_name, email")
+          .eq("status", "active")
 
-      if (booksRes.error) console.error("❌ Books error:", booksRes.error)
-      else setBooks(booksRes.data || [])
+        if (patronsError) {
+          console.error("❌ Patrons error:", patronsError)
+        } else {
+          setPatrons(patronsData || [])
+        }
 
-      setLoading(false)
+        // Fetch available books
+        const { data: booksData, error: booksError } = await supabase
+          .from("books")
+          .select("id, title, author")
+          .eq("status", "available")
+
+        if (booksError) {
+          console.error("❌ Books error:", booksError)
+        } else {
+          setBooks(booksData || [])
+        }
+
+      } catch (error) {
+        console.error("❌ Unexpected error:", error)
+      } finally {
+        setLoading(false)
+      }
     }
 
     fetchData()
   }, [])
 
-  // Mark transaction as active (borrowed → active)
+  // Mark transaction as active
   const markAsActive = async (loanId: string) => {
-    const { data: loanData, error: loanFetchError } = await supabase
-      .from("loans")
-      .select("book_id")
-      .eq("id", loanId)
-      .single()
+    try {
+      const { error: loanUpdateError } = await supabase
+        .from("loans")
+        .update({ status: "active" })
+        .eq("id", loanId)
 
-    if (loanFetchError || !loanData) {
+      if (loanUpdateError) {
+        toast.error("Failed to update transaction")
+        return
+      }
+
+      // Get book_id from the transaction
+      const transaction = transactions.find(t => t.id === loanId)
+      if (transaction) {
+        const { error: bookUpdateError } = await supabase
+          .from("books")
+          .update({ status: "checked_out" })
+          .eq("id", transaction.book_id)
+
+        if (bookUpdateError) toast.error("Failed to update book status")
+      }
+
+      setTransactions(prev =>
+        prev.map(t => t.id === loanId ? { ...t, status: "active" } : t)
+      )
+
+      toast.success("Transaction is now active ✅")
+    } catch (error) {
       toast.error("Failed to activate transaction")
-      return
     }
-
-    const { error: loanUpdateError } = await supabase
-      .from("loans")
-      .update({ status: "active" })
-      .eq("id", loanId)
-
-    if (loanUpdateError) {
-      toast.error("Failed to update transaction")
-      return
-    }
-
-    const { error: bookUpdateError } = await supabase
-      .from("books")
-      .update({ status: "checked_out" })
-      .eq("id", loanData.book_id)
-
-    if (bookUpdateError) toast.error("Failed to update book status")
-
-    setTransactions(prev =>
-      prev.map(t => t.id === loanId ? { ...t, status: "active" } : t)
-    )
-
-    toast.success("Transaction is now active ✅")
   }
 
-  // Mark transaction as returned (active → returned)
+  // Mark transaction as returned
   const markAsReturned = async (loanId: string) => {
-    const { data: loanData, error: loanFetchError } = await supabase
-      .from("loans")
-      .select("book_id")
-      .eq("id", loanId)
-      .single()
+    try {
+      const now = new Date().toISOString()
 
-    if (loanFetchError || !loanData) {
+      const { error: loanUpdateError } = await supabase
+        .from("loans")
+        .update({ 
+          status: "returned", 
+          returned_date: now 
+        })
+        .eq("id", loanId)
+
+      if (loanUpdateError) {
+        toast.error("Failed to update transaction")
+        return
+      }
+
+      // Get book_id from the transaction
+      const transaction = transactions.find(t => t.id === loanId)
+      if (transaction) {
+        const { error: bookUpdateError } = await supabase
+          .from("books")
+          .update({ status: "available" })
+          .eq("id", transaction.book_id)
+
+        if (bookUpdateError) toast.error("Failed to update book status")
+      }
+
+      setTransactions(prev =>
+        prev.map(t => t.id === loanId ? { 
+          ...t, 
+          status: "returned", 
+          returned_date: now 
+        } : t)
+      )
+
+      // Refresh available books dropdown
+      const { data: refreshedBooks } = await supabase
+        .from("books")
+        .select("id, title, author")
+        .eq("status", "available")
+      setBooks(refreshedBooks || [])
+
+      toast.success("Book marked as returned ✅")
+    } catch (error) {
       toast.error("Failed to process return")
-      return
     }
-
-    const now = new Date().toISOString()
-
-    const { error: loanUpdateError } = await supabase
-      .from("loans")
-      .update({ status: "returned", returned_at: now })
-      .eq("id", loanId)
-
-    if (loanUpdateError) {
-      toast.error("Failed to update transaction")
-      return
-    }
-
-    const { error: bookUpdateError } = await supabase
-      .from("books")
-      .update({ status: "available" })
-      .eq("id", loanData.book_id)
-
-    if (bookUpdateError) toast.error("Failed to update book status")
-
-    setTransactions(prev =>
-      prev.map(t => t.id === loanId ? { ...t, status: "returned", returned_at: now } : t)
-    )
-
-    // Refresh available books dropdown
-    const { data: refreshedBooks } = await supabase
-      .from("books")
-      .select("id, title")
-      .eq("status", "available")
-    setBooks(refreshedBooks || [])
-
-    toast.success("Book marked as returned ✅")
   }
 
   // Add new transaction
   const handleAddTransaction = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!newLoan.borrower_id || !newLoan.book_id || !newLoan.due_date) {
+    if (!newLoan.patron_id || !newLoan.book_id || !newLoan.due_date) {
       toast.error("Please fill in all fields")
       return
     }
 
-    const { error: loanError, data: loanData } = await supabase
-      .from("loans")
-      .insert({
-        borrower_id: newLoan.borrower_id,
-        book_id: newLoan.book_id,
-        due_date: newLoan.due_date,
-        status: "borrowed",
-      })
-      .select(`
-        id,
-        status,
-        due_date,
-        returned_at,
-        created_at,
-        borrowers ( id, name, email ),
-        books ( id, title, isbn )
-      `)
-      .single()
+    try {
+      const { error: loanError, data: loanData } = await supabase
+        .from("loans")
+        .insert({
+          patron_id: newLoan.patron_id,
+          book_id: newLoan.book_id,
+          due_date: newLoan.due_date,
+          loan_date: new Date().toISOString(),
+          status: "borrowed",
+        })
+        .select()
+        .single()
 
-    if (loanError || !loanData) {
-      console.error("❌ Failed to add transaction:", loanError)
+      if (loanError) {
+        console.error("❌ Failed to add transaction:", loanError)
+        toast.error("Failed to add transaction")
+        return
+      }
+
+      // Update book status
+      const { error: bookUpdateError } = await supabase
+        .from("books")
+        .update({ status: "borrowed" })
+        .eq("id", newLoan.book_id)
+
+      if (bookUpdateError) {
+        console.error("❌ Failed to update book status:", bookUpdateError)
+      }
+
+      // Fetch the complete transaction with patron and book data
+      const { data: completeTransaction, error: fetchError } = await supabase
+        .from("loans")
+        .select(`
+          id,
+          status,
+          due_date,
+          returned_date,
+          created_at,
+          loan_date,
+          patron_id,
+          book_id,
+          patrons ( id, full_name, email ),
+          books ( id, title, author, isbn )
+        `)
+        .eq("id", loanData.id)
+        .single()
+
+      if (!fetchError && completeTransaction) {
+        setTransactions(prev => [completeTransaction, ...prev])
+      } else {
+        // If we can't fetch the complete data, use the basic data
+        setTransactions(prev => [loanData, ...prev])
+      }
+
+      setNewLoan({ patron_id: "", book_id: "", due_date: "" })
+
+      // Refresh available books dropdown
+      const { data: refreshedBooks } = await supabase
+        .from("books")
+        .select("id, title, author")
+        .eq("status", "available")
+      setBooks(refreshedBooks || [])
+
+      toast.success("Transaction added successfully ✅")
+    } catch (error) {
+      console.error("❌ Unexpected error adding transaction:", error)
       toast.error("Failed to add transaction")
-      return
     }
-
-    // Update book status
-    const { error: bookUpdateError } = await supabase
-      .from("books")
-      .update({ status: "borrowed" })
-      .eq("id", newLoan.book_id)
-
-    if (bookUpdateError) console.error("❌ Failed to update book status after borrow:", bookUpdateError)
-
-    // Update UI
-    setTransactions(prev => [loanData, ...prev])
-    setNewLoan({ borrower_id: "", book_id: "", due_date: "" })
-
-    // Refresh available books dropdown
-    const { data: refreshedBooks } = await supabase
-      .from("books")
-      .select("id, title")
-      .eq("status", "available")
-    setBooks(refreshedBooks || [])
-
-    toast.success("Transaction added successfully ✅")
   }
 
   // Filter active transactions based on search
   const filteredTransactions = transactions.filter(t => {
-    const borrowerMatch = t.borrowers?.name.toLowerCase().includes(search.borrower.toLowerCase())
-    const bookMatch = t.books?.title.toLowerCase().includes(search.book.toLowerCase())
+    const patronName = t.patrons?.full_name || ""
+    const bookTitle = t.books?.title || ""
+    const patronMatch = patronName.toLowerCase().includes(search.patron.toLowerCase())
+    const bookMatch = bookTitle.toLowerCase().includes(search.book.toLowerCase())
     const dateMatch = search.date
       ? new Date(t.due_date).toISOString().split("T")[0] === search.date
       : true
     const activeStatus = t.status !== "returned"
-    return borrowerMatch && bookMatch && dateMatch && activeStatus
+    return patronMatch && bookMatch && dateMatch && activeStatus
   })
 
   // Filter history transactions based on search
   const filteredHistory = transactions
     .filter(t => {
-      const borrowerMatch = t.borrowers?.name.toLowerCase().includes(historySearch.borrower.toLowerCase())
-      const bookMatch = t.books?.title.toLowerCase().includes(historySearch.book.toLowerCase())
+      const patronName = t.patrons?.full_name || ""
+      const bookTitle = t.books?.title || ""
+      const patronMatch = patronName.toLowerCase().includes(historySearch.patron.toLowerCase())
+      const bookMatch = bookTitle.toLowerCase().includes(historySearch.book.toLowerCase())
       const dateFromMatch = historySearch.date_from
         ? new Date(t.created_at) >= new Date(historySearch.date_from)
         : true
@@ -227,12 +317,22 @@ export default function TransactionsPage() {
         : true
       const statusMatch = historySearch.status === "all" || t.status === historySearch.status
       
-      return borrowerMatch && bookMatch && dateFromMatch && dateToMatch && statusMatch
+      return patronMatch && bookMatch && dateFromMatch && dateToMatch && statusMatch
     })
     .sort((a, b) => {
       if (sortConfig.key) {
-        const aValue = a[sortConfig.key] || (a.borrowers && a.borrowers[sortConfig.key]) || (a.books && a.books[sortConfig.key])
-        const bValue = b[sortConfig.key] || (b.borrowers && b.borrowers[sortConfig.key]) || (b.books && b.books[sortConfig.key])
+        let aValue, bValue
+        
+        if (sortConfig.key === "full_name") {
+          aValue = a.patrons?.full_name || ""
+          bValue = b.patrons?.full_name || ""
+        } else if (sortConfig.key === "title") {
+          aValue = a.books?.title || ""
+          bValue = b.books?.title || ""
+        } else {
+          aValue = a[sortConfig.key as keyof Transaction] || ""
+          bValue = b[sortConfig.key as keyof Transaction] || ""
+        }
         
         if (aValue < bValue) return sortConfig.direction === "asc" ? -1 : 1
         if (aValue > bValue) return sortConfig.direction === "asc" ? 1 : -1
@@ -261,7 +361,7 @@ export default function TransactionsPage() {
 
   // Check if a loan is overdue
   const isOverdue = (dueDate: string, status: string) => {
-    return status !== "returned" && new Date(due_date) < new Date()
+    return status !== "returned" && new Date(dueDate) < new Date()
   }
 
   return (
@@ -287,18 +387,18 @@ export default function TransactionsPage() {
               <CardContent>
                 <form onSubmit={handleAddTransaction} className="grid gap-4 md:grid-cols-3">
                   <div className="flex flex-col gap-2">
-                    <Label>Borrower</Label>
+                    <Label>Patron</Label>
                     <Select
-                      value={newLoan.borrower_id}
-                      onValueChange={val => setNewLoan({ ...newLoan, borrower_id: val })}
+                      value={newLoan.patron_id}
+                      onValueChange={val => setNewLoan({ ...newLoan, patron_id: val })}
                     >
                       <SelectTrigger>
-                        <SelectValue placeholder="Select borrower" />
+                        <SelectValue placeholder="Select patron" />
                       </SelectTrigger>
                       <SelectContent>
-                        {borrowers.map(b => (
-                          <SelectItem key={b.id} value={b.id}>
-                            {b.name}
+                        {patrons.map(p => (
+                          <SelectItem key={p.id} value={p.id}>
+                            {p.full_name}
                           </SelectItem>
                         ))}
                       </SelectContent>
@@ -317,7 +417,7 @@ export default function TransactionsPage() {
                       <SelectContent>
                         {books.map(b => (
                           <SelectItem key={b.id} value={b.id}>
-                            {b.title}
+                            {b.title} by {b.author}
                           </SelectItem>
                         ))}
                       </SelectContent>
@@ -330,6 +430,7 @@ export default function TransactionsPage() {
                       type="date"
                       value={newLoan.due_date}
                       onChange={e => setNewLoan({ ...newLoan, due_date: e.target.value })}
+                      min={new Date().toISOString().split('T')[0]}
                     />
                   </div>
 
@@ -347,11 +448,11 @@ export default function TransactionsPage() {
             <Card className="p-4">
               <div className="grid gap-4 md:grid-cols-3">
                 <div className="flex flex-col gap-2">
-                  <Label>Search Borrower</Label>
+                  <Label>Search Patron</Label>
                   <Input
-                    placeholder="Borrower name"
-                    value={search.borrower}
-                    onChange={e => setSearch({ ...search, borrower: e.target.value })}
+                    placeholder="Patron name"
+                    value={search.patron}
+                    onChange={e => setSearch({ ...search, patron: e.target.value })}
                   />
                 </div>
 
@@ -387,7 +488,7 @@ export default function TransactionsPage() {
                 <table className="w-full text-sm">
                   <thead className="bg-muted/50">
                     <tr className="text-left">
-                      <th className="p-3">Borrower</th>
+                      <th className="p-3">Patron</th>
                       <th className="p-3">Book</th>
                       <th className="p-3">Due Date</th>
                       <th className="p-3">Status</th>
@@ -397,8 +498,8 @@ export default function TransactionsPage() {
                   <tbody>
                     {filteredTransactions.map(t => (
                       <tr key={t.id} className="border-t hover:bg-muted/30">
-                        <td className="p-3">{t.borrowers?.name}</td>
-                        <td className="p-3">{t.books?.title}</td>
+                        <td className="p-3">{t.patrons?.full_name || "Unknown"}</td>
+                        <td className="p-3">{t.books?.title || "Unknown Book"}</td>
                         <td className="p-3">
                           <div className="flex items-center gap-1">
                             <Calendar className="h-3 w-3 text-muted-foreground" />
@@ -441,11 +542,11 @@ export default function TransactionsPage() {
             <Card className="p-4">
               <div className="grid gap-4 md:grid-cols-5">
                 <div className="flex flex-col gap-2">
-                  <Label>Borrower</Label>
+                  <Label>Patron</Label>
                   <Input
-                    placeholder="Borrower name"
-                    value={historySearch.borrower}
-                    onChange={e => setHistorySearch({ ...historySearch, borrower: e.target.value })}
+                    placeholder="Patron name"
+                    value={historySearch.patron}
+                    onChange={e => setHistorySearch({ ...historySearch, patron: e.target.value })}
                   />
                 </div>
 
@@ -519,10 +620,10 @@ export default function TransactionsPage() {
                       </th>
                       <th 
                         className="p-3 cursor-pointer hover:bg-muted/70"
-                        onClick={() => handleSort("name")}
+                        onClick={() => handleSort("full_name")}
                       >
                         <div className="flex items-center gap-1">
-                          Borrower
+                          Patron
                           <ArrowUpDown className="h-3 w-3" />
                         </div>
                       </th>
@@ -552,23 +653,23 @@ export default function TransactionsPage() {
                         <td className="p-3">
                           <div className="flex items-center gap-1">
                             <User className="h-3 w-3 text-muted-foreground" />
-                            {t.borrowers?.name}
+                            {t.patrons?.full_name || "Unknown"}
                           </div>
                         </td>
                         <td className="p-3">
                           <div className="flex items-center gap-1">
                             <Book className="h-3 w-3 text-muted-foreground" />
-                            {t.books?.title}
+                            {t.books?.title || "Unknown Book"}
                           </div>
                         </td>
                         <td className="p-3">
                           {new Date(t.due_date).toLocaleDateString()}
                         </td>
                         <td className="p-3">
-                          {t.returned_at ? (
+                          {t.returned_date ? (
                             <div className="flex items-center gap-1 text-green-600">
                               <Calendar className="h-3 w-3" />
-                              {new Date(t.returned_at).toLocaleDateString()}
+                              {new Date(t.returned_date).toLocaleDateString()}
                             </div>
                           ) : (
                             <span className="text-muted-foreground">Not returned</span>
