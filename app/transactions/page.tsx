@@ -20,7 +20,7 @@ interface Transaction {
   returned_date: string | null
   created_at: string
   loan_date: string
-  pattern_id: string  // Changed from patron_id to pattern_id
+  patron_id: string
   book_id: string
   borrowers?: {
     id: string
@@ -41,7 +41,7 @@ export default function TransactionsPage() {
   const [books, setBooks] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [newLoan, setNewLoan] = useState({
-    pattern_id: "",  // Changed from patron_id to pattern_id
+    patron_id: "",
     book_id: "",
     due_date: "",
   })
@@ -55,77 +55,87 @@ export default function TransactionsPage() {
   })
   const [sortConfig, setSortConfig] = useState({ key: "due_date", direction: "desc" })
 
-  // Fetch data
+  // Fetch data with proper error handling
   useEffect(() => {
     const fetchData = async () => {
       try {
-        // First, let's debug the actual data structure
-        console.log("🔍 Fetching loans data...")
+        setLoading(true)
         
-        // Fetch loans with proper column name (pattern_id instead of patron_id)
-        const { data: loansData, error: loansError } = await supabase
-          .from("loans")
-          .select(`
-            id,
-            status,
-            due_date,
-            returned_date,
-            created_at,
-            loan_date,
-            pattern_id,  // Changed to pattern_id
-            book_id,
-            borrowers ( id, name, email ),
-            books ( id, title, author, isbn )
-          `)
-          .order("created_at", { ascending: false })
+        console.log("🔍 Starting data fetch...")
 
+        // Fetch all data separately to debug relationships
+        const [
+          { data: loansData, error: loansError },
+          { data: borrowersData, error: borrowersError },
+          { data: booksData, error: booksError }
+        ] = await Promise.all([
+          // Try to fetch loans with joins first
+          supabase
+            .from("loans")
+            .select(`
+              *,
+              borrowers!loans_patron_id_fkey ( id, name, email ),
+              books!loans_book_id_fkey ( id, title, author, isbn )
+            `)
+            .order("created_at", { ascending: false }),
+          
+          // Fetch all borrowers
+          supabase
+            .from("borrowers")
+            .select("id, name, email, phone, status")
+            .order("name"),
+          
+          // Fetch available books
+          supabase
+            .from("books")
+            .select("id, title, author, isbn, status")
+            .eq("status", "available")
+            .order("title")
+        ])
+
+        // Handle loans data
         if (loansError) {
-          console.error("❌ Loans error:", loansError)
-          // Try a simpler query to see what's available
+          console.error("❌ Loans join error:", loansError)
+          
+          // If join fails, fetch loans without joins and we'll manually link the data
           const { data: simpleLoans, error: simpleError } = await supabase
             .from("loans")
             .select("*")
             .order("created_at", { ascending: false })
-            .limit(5)
           
           if (simpleError) {
             console.error("❌ Simple loans error:", simpleError)
+            setTransactions([])
           } else {
-            console.log("📋 Simple loans data:", simpleLoans)
+            console.log("📋 Loans without joins:", simpleLoans)
             setTransactions(simpleLoans || [])
           }
         } else {
-          console.log("✅ Loans data with joins:", loansData)
+          console.log("✅ Loans with joins:", loansData)
           setTransactions(loansData || [])
         }
 
-        // Fetch borrowers
-        const { data: borrowersData, error: borrowersError } = await supabase
-          .from("borrowers")
-          .select("id, name, email, status")
-
+        // Handle borrowers data
         if (borrowersError) {
           console.error("❌ Borrowers error:", borrowersError)
+          setBorrowers([])
         } else {
-          console.log("👥 Borrowers data:", borrowersData)
+          console.log("✅ Borrowers:", borrowersData)
           setBorrowers(borrowersData || [])
         }
 
-        // Fetch available books
-        const { data: booksData, error: booksError } = await supabase
-          .from("books")
-          .select("id, title, author, isbn")
-          .eq("status", "available")
-
+        // Handle books data
         if (booksError) {
           console.error("❌ Books error:", booksError)
+          setBooks([])
         } else {
-          console.log("📚 Available books:", booksData)
+          console.log("✅ Books:", booksData)
           setBooks(booksData || [])
         }
 
       } catch (error) {
         console.error("❌ Unexpected error:", error)
+        toast.error("Failed to load data")
       } finally {
         setLoading(false)
       }
@@ -134,33 +144,110 @@ export default function TransactionsPage() {
     fetchData()
   }, [])
 
+  // Function to manually link data when joins fail
+  const getEnhancedTransactions = () => {
+    return transactions.map(transaction => {
+      // If joins already worked, return as is
+      if (transaction.borrowers && transaction.books) {
+        return transaction
+      }
+
+      // Otherwise, manually link the data
+      const borrower = borrowers.find(b => b.id === transaction.patron_id)
+      const book = books.find(b => b.id === transaction.book_id)
+      
+      return {
+        ...transaction,
+        borrowers: borrower || undefined,
+        books: book || undefined
+      }
+    })
+  }
+
+  // Enhanced function to get borrower name with multiple fallbacks
+  const getBorrowerName = (transaction: Transaction) => {
+    // Try joined data first
+    if (transaction.borrowers?.name) {
+      return transaction.borrowers.name
+    }
+    
+    // Try local borrowers array
+    const borrower = borrowers.find(b => b.id === transaction.patron_id)
+    if (borrower?.name) {
+      return borrower.name
+    }
+    
+    // Final fallback
+    return `Borrower #${transaction.patron_id?.substring(0, 8)}...`
+  }
+
+  // Enhanced function to get book title with multiple fallbacks
+  const getBookTitle = (transaction: Transaction) => {
+    // Try joined data first
+    if (transaction.books?.title) {
+      return transaction.books.title
+    }
+    
+    // Try local books array
+    const book = books.find(b => b.id === transaction.book_id)
+    if (book?.title) {
+      return book.title
+    }
+    
+    // Final fallback
+    return `Book #${transaction.book_id?.substring(0, 8)}...`
+  }
+
   // Debug function to check data relationships
   const debugDataRelationships = async () => {
-    console.log("🔍 Debugging data relationships...")
-    
-    // Check if loans have valid pattern_ids that exist in borrowers
-    const { data: allLoans } = await supabase
-      .from("loans")
-      .select("pattern_id, book_id")
-      .limit(10)
-    
-    console.log("📋 Sample loans with pattern_ids:", allLoans)
-    
-    // Check borrowers
-    const { data: allBorrowers } = await supabase
-      .from("borrowers")
-      .select("id, name")
-      .limit(10)
-    
-    console.log("👥 Sample borrowers:", allBorrowers)
-    
-    // Check books
-    const { data: allBooks } = await supabase
-      .from("books")
-      .select("id, title")
-      .limit(10)
-    
-    console.log("📚 Sample books:", allBooks)
+    try {
+      toast.loading("Checking data relationships...")
+      
+      // Get sample data to check relationships
+      const { data: sampleLoans, error: loansError } = await supabase
+        .from("loans")
+        .select("id, patron_id, book_id")
+        .limit(5)
+
+      if (loansError) throw loansError
+
+      const { data: sampleBorrowers, error: borrowersError } = await supabase
+        .from("borrowers")
+        .select("id, name")
+        .limit(5)
+
+      if (borrowersError) throw borrowersError
+
+      const { data: sampleBooks, error: booksError } = await supabase
+        .from("books")
+        .select("id, title")
+        .limit(5)
+
+      if (booksError) throw booksError
+
+      console.log("🔍 DATA RELATIONSHIP CHECK:")
+      console.log("Sample Loans:", sampleLoans)
+      console.log("Sample Borrowers:", sampleBorrowers)
+      console.log("Sample Books:", sampleBooks)
+
+      // Check if patron_ids in loans exist in borrowers
+      if (sampleLoans && sampleBorrowers) {
+        const borrowerIds = sampleBorrowers.map(b => b.id)
+        const invalidLoans = sampleLoans.filter(loan => !borrowerIds.includes(loan.patron_id))
+        
+        if (invalidLoans.length > 0) {
+          console.warn("⚠️ Loans with invalid patron_ids:", invalidLoans)
+          toast.warning(`Found ${invalidLoans.length} loans with invalid borrower references`)
+        } else {
+          console.log("✅ All sample loans have valid patron_ids")
+          toast.success("All loans have valid borrower references!")
+        }
+      }
+
+    } catch (error) {
+      console.error("❌ Error checking data relationships:", error)
+      toast.error("Failed to check data relationships")
+    }
   }
 
   // Mark transaction as active
@@ -171,28 +258,16 @@ export default function TransactionsPage() {
         .update({ status: "active" })
         .eq("id", loanId)
 
-      if (loanUpdateError) {
-        toast.error("Failed to update transaction")
-        return
-      }
+      if (loanUpdateError) throw loanUpdateError
 
-      // Get book_id from the transaction
-      const transaction = transactions.find(t => t.id === loanId)
-      if (transaction) {
-        const { error: bookUpdateError } = await supabase
-          .from("books")
-          .update({ status: "checked_out" })
-          .eq("id", transaction.book_id)
-
-        if (bookUpdateError) toast.error("Failed to update book status")
-      }
-
+      // Update local state
       setTransactions(prev =>
         prev.map(t => t.id === loanId ? { ...t, status: "active" } : t)
       )
 
       toast.success("Transaction is now active ✅")
     } catch (error) {
+      console.error("❌ Error activating transaction:", error)
       toast.error("Failed to activate transaction")
     }
   }
@@ -210,22 +285,9 @@ export default function TransactionsPage() {
         })
         .eq("id", loanId)
 
-      if (loanUpdateError) {
-        toast.error("Failed to update transaction")
-        return
-      }
+      if (loanUpdateError) throw loanUpdateError
 
-      // Get book_id from the transaction
-      const transaction = transactions.find(t => t.id === loanId)
-      if (transaction) {
-        const { error: bookUpdateError } = await supabase
-          .from("books")
-          .update({ status: "available" })
-          .eq("id", transaction.book_id)
-
-        if (bookUpdateError) toast.error("Failed to update book status")
-      }
-
+      // Update local state
       setTransactions(prev =>
         prev.map(t => t.id === loanId ? { 
           ...t, 
@@ -234,7 +296,7 @@ export default function TransactionsPage() {
         } : t)
       )
 
-      // Refresh available books dropdown
+      // Refresh available books
       const { data: refreshedBooks } = await supabase
         .from("books")
         .select("id, title, author")
@@ -243,6 +305,7 @@ export default function TransactionsPage() {
 
       toast.success("Book marked as returned ✅")
     } catch (error) {
+      console.error("❌ Error returning book:", error)
       toast.error("Failed to process return")
     }
   }
@@ -250,7 +313,7 @@ export default function TransactionsPage() {
   // Add new transaction
   const handleAddTransaction = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!newLoan.pattern_id || !newLoan.book_id || !newLoan.due_date) {
+    if (!newLoan.patron_id || !newLoan.book_id || !newLoan.due_date) {
       toast.error("Please fill in all fields")
       return
     }
@@ -259,7 +322,7 @@ export default function TransactionsPage() {
       const { error: loanError, data: loanData } = await supabase
         .from("loans")
         .insert({
-          pattern_id: newLoan.pattern_id,  // Changed to pattern_id
+          patron_id: newLoan.patron_id,
           book_id: newLoan.book_id,
           due_date: newLoan.due_date,
           loan_date: new Date().toISOString(),
@@ -268,50 +331,35 @@ export default function TransactionsPage() {
         .select()
         .single()
 
-      if (loanError) {
-        console.error("❌ Failed to add transaction:", loanError)
-        toast.error("Failed to add transaction")
-        return
-      }
+      if (loanError) throw loanError
 
       // Update book status
-      const { error: bookUpdateError } = await supabase
+      await supabase
         .from("books")
         .update({ status: "borrowed" })
         .eq("id", newLoan.book_id)
 
-      if (bookUpdateError) {
-        console.error("❌ Failed to update book status:", bookUpdateError)
-      }
-
-      // Fetch the complete transaction with borrower and book data
-      const { data: completeTransaction, error: fetchError } = await supabase
+      // Refresh transactions to get the new one with proper joins
+      const { data: refreshedLoans, error: refreshError } = await supabase
         .from("loans")
         .select(`
-          id,
-          status,
-          due_date,
-          returned_date,
-          created_at,
-          loan_date,
-          pattern_id,  // Changed to pattern_id
-          book_id,
-          borrowers ( id, name, email ),
-          books ( id, title, author, isbn )
+          *,
+          borrowers!loans_patron_id_fkey ( id, name, email ),
+          books!loans_book_id_fkey ( id, title, author, isbn )
         `)
-        .eq("id", loanData.id)
-        .single()
+        .order("created_at", { ascending: false })
 
-      if (!fetchError && completeTransaction) {
-        setTransactions(prev => [completeTransaction, ...prev])
+      if (!refreshError && refreshedLoans) {
+        setTransactions(refreshedLoans)
       } else {
-        // If we can't fetch the complete data, use the basic data
+        // Fallback: add the basic loan data
         setTransactions(prev => [loanData, ...prev])
       }
 
-      setNewLoan({ pattern_id: "", book_id: "", due_date: "" })
+      // Reset form
+      setNewLoan({ patron_id: "", book_id: "", due_date: "" })
 
-      // Refresh available books dropdown
+      // Refresh available books
       const { data: refreshedBooks } = await supabase
         .from("books")
         .select("id, title, author")
@@ -320,17 +368,20 @@ export default function TransactionsPage() {
 
       toast.success("Transaction added successfully ✅")
     } catch (error) {
-      console.error("❌ Unexpected error adding transaction:", error)
+      console.error("❌ Error adding transaction:", error)
       toast.error("Failed to add transaction")
     }
   }
 
+  // Use enhanced transactions for display
+  const enhancedTransactions = getEnhancedTransactions()
+
   // Filter active transactions based on search
-  const filteredTransactions = transactions.filter(t => {
-    const borrowerName = t.borrowers?.name || ""
-    const bookTitle = t.books?.title || ""
-    const borrowerMatch = borrowerName.toLowerCase().includes(search.borrower.toLowerCase())
-    const bookMatch = bookTitle.toLowerCase().includes(search.book.toLowerCase())
+  const filteredTransactions = enhancedTransactions.filter(t => {
+    const borrowerName = getBorrowerName(t).toLowerCase()
+    const bookTitle = getBookTitle(t).toLowerCase()
+    const borrowerMatch = borrowerName.includes(search.borrower.toLowerCase())
+    const bookMatch = bookTitle.includes(search.book.toLowerCase())
     const dateMatch = search.date
       ? new Date(t.due_date).toISOString().split("T")[0] === search.date
       : true
@@ -339,12 +390,12 @@ export default function TransactionsPage() {
   })
 
   // Filter history transactions based on search
-  const filteredHistory = transactions
+  const filteredHistory = enhancedTransactions
     .filter(t => {
-      const borrowerName = t.borrowers?.name || ""
-      const bookTitle = t.books?.title || ""
-      const borrowerMatch = borrowerName.toLowerCase().includes(historySearch.borrower.toLowerCase())
-      const bookMatch = bookTitle.toLowerCase().includes(historySearch.book.toLowerCase())
+      const borrowerName = getBorrowerName(t).toLowerCase()
+      const bookTitle = getBookTitle(t).toLowerCase()
+      const borrowerMatch = borrowerName.includes(historySearch.borrower.toLowerCase())
+      const bookMatch = bookTitle.includes(historySearch.book.toLowerCase())
       const dateFromMatch = historySearch.date_from
         ? new Date(t.created_at) >= new Date(historySearch.date_from)
         : true
@@ -360,11 +411,11 @@ export default function TransactionsPage() {
         let aValue, bValue
         
         if (sortConfig.key === "name") {
-          aValue = a.borrowers?.name || ""
-          bValue = b.borrowers?.name || ""
+          aValue = getBorrowerName(a)
+          bValue = getBorrowerName(b)
         } else if (sortConfig.key === "title") {
-          aValue = a.books?.title || ""
-          bValue = b.books?.title || ""
+          aValue = getBookTitle(a)
+          bValue = getBookTitle(b)
         } else {
           aValue = a[sortConfig.key as keyof Transaction] || ""
           bValue = b[sortConfig.key as keyof Transaction] || ""
@@ -408,7 +459,7 @@ export default function TransactionsPage() {
         <div className="flex justify-between items-center">
           <h1 className="text-3xl font-bold">Transactions</h1>
           <Button variant="outline" onClick={debugDataRelationships}>
-            Debug Data
+            Debug Data Relationships
           </Button>
         </div>
 
@@ -430,8 +481,8 @@ export default function TransactionsPage() {
                   <div className="flex flex-col gap-2">
                     <Label>Borrower</Label>
                     <Select
-                      value={newLoan.pattern_id}
-                      onValueChange={val => setNewLoan({ ...newLoan, pattern_id: val })}
+                      value={newLoan.patron_id}
+                      onValueChange={val => setNewLoan({ ...newLoan, patron_id: val })}
                     >
                       <SelectTrigger>
                         <SelectValue placeholder="Select borrower" />
@@ -439,7 +490,7 @@ export default function TransactionsPage() {
                       <SelectContent>
                         {borrowers.map(b => (
                           <SelectItem key={b.id} value={b.id}>
-                            {b.name}
+                            {b.name} {b.email && `(${b.email})`}
                           </SelectItem>
                         ))}
                       </SelectContent>
@@ -519,7 +570,9 @@ export default function TransactionsPage() {
 
             {/* Active Transactions Table */}
             {loading ? (
-              <p>Loading...</p>
+              <div className="flex justify-center items-center p-8">
+                <p>Loading transactions...</p>
+              </div>
             ) : filteredTransactions.length === 0 ? (
               <div className="border rounded-md p-6 text-center text-muted-foreground">
                 No active transactions found.
@@ -539,8 +592,8 @@ export default function TransactionsPage() {
                   <tbody>
                     {filteredTransactions.map(t => (
                       <tr key={t.id} className="border-t hover:bg-muted/30">
-                        <td className="p-3">{t.borrowers?.name || `Unknown (ID: ${t.pattern_id})`}</td>
-                        <td className="p-3">{t.books?.title || `Unknown Book (ID: ${t.book_id})`}</td>
+                        <td className="p-3 font-medium">{getBorrowerName(t)}</td>
+                        <td className="p-3">{getBookTitle(t)}</td>
                         <td className="p-3">
                           <div className="flex items-center gap-1">
                             <Calendar className="h-3 w-3 text-muted-foreground" />
@@ -640,7 +693,9 @@ export default function TransactionsPage() {
 
             {/* Transaction History Table */}
             {loading ? (
-              <p>Loading history...</p>
+              <div className="flex justify-center items-center p-8">
+                <p>Loading history...</p>
+              </div>
             ) : filteredHistory.length === 0 ? (
               <div className="border rounded-md p-6 text-center text-muted-foreground">
                 No transaction history found.
@@ -691,16 +746,16 @@ export default function TransactionsPage() {
                             {new Date(t.created_at).toLocaleDateString()}
                           </div>
                         </td>
-                        <td className="p-3">
+                        <td className="p-3 font-medium">
                           <div className="flex items-center gap-1">
                             <User className="h-3 w-3 text-muted-foreground" />
-                            {t.borrowers?.name || `Unknown (ID: ${t.pattern_id})`}
+                            {getBorrowerName(t)}
                           </div>
                         </td>
                         <td className="p-3">
                           <div className="flex items-center gap-1">
                             <Book className="h-3 w-3 text-muted-foreground" />
-                            {t.books?.title || `Unknown Book (ID: ${t.book_id})`}
+                            {getBookTitle(t)}
                           </div>
                         </td>
                         <td className="p-3">
