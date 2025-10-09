@@ -22,9 +22,9 @@ interface Transaction {
   loan_date: string
   patron_id: string
   book_id: string
-  patrons?: {
+  borrowers?: {
     id: string
-    full_name: string
+    name: string
     email: string
   }
   books?: {
@@ -37,7 +37,7 @@ interface Transaction {
 
 export default function TransactionsPage() {
   const [transactions, setTransactions] = useState<Transaction[]>([])
-  const [patrons, setPatrons] = useState<any[]>([])
+  const [borrowers, setBorrowers] = useState<any[]>([])
   const [books, setBooks] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [newLoan, setNewLoan] = useState({
@@ -45,9 +45,9 @@ export default function TransactionsPage() {
     book_id: "",
     due_date: "",
   })
-  const [search, setSearch] = useState({ patron: "", book: "", date: "" })
+  const [search, setSearch] = useState({ borrower: "", book: "", date: "" })
   const [historySearch, setHistorySearch] = useState({ 
-    patron: "", 
+    borrower: "", 
     book: "", 
     date_from: "", 
     date_to: "",
@@ -59,7 +59,7 @@ export default function TransactionsPage() {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        // Fetch loans with patron and book data
+        // Fetch loans with borrower and book data
         const { data: loansData, error: loansError } = await supabase
           .from("loans")
           .select(`
@@ -71,7 +71,7 @@ export default function TransactionsPage() {
             loan_date,
             patron_id,
             book_id,
-            patrons ( id, full_name, email ),
+            borrowers ( id, name, email ),
             books ( id, title, author, isbn )
           `)
           .order("created_at", { ascending: false })
@@ -93,16 +93,16 @@ export default function TransactionsPage() {
           setTransactions(loansData || [])
         }
 
-        // Fetch patrons
-        const { data: patronsData, error: patronsError } = await supabase
-          .from("patrons")
-          .select("id, full_name, email")
+        // Fetch borrowers
+        const { data: borrowersData, error: borrowersError } = await supabase
+          .from("borrowers")
+          .select("id, name, email, status")
           .eq("status", "active")
 
-        if (patronsError) {
-          console.error("❌ Patrons error:", patronsError)
+        if (borrowersError) {
+          console.error("❌ Borrowers error:", borrowersError)
         } else {
-          setPatrons(patronsData || [])
+          setBorrowers(borrowersData || [])
         }
 
         // Fetch available books
@@ -248,7 +248,7 @@ export default function TransactionsPage() {
         console.error("❌ Failed to update book status:", bookUpdateError)
       }
 
-      // Fetch the complete transaction with patron and book data
+      // Fetch the complete transaction with borrower and book data
       const { data: completeTransaction, error: fetchError } = await supabase
         .from("loans")
         .select(`
@@ -260,7 +260,7 @@ export default function TransactionsPage() {
           loan_date,
           patron_id,
           book_id,
-          patrons ( id, full_name, email ),
+          borrowers ( id, name, email ),
           books ( id, title, author, isbn )
         `)
         .eq("id", loanData.id)
@@ -291,23 +291,23 @@ export default function TransactionsPage() {
 
   // Filter active transactions based on search
   const filteredTransactions = transactions.filter(t => {
-    const patronName = t.patrons?.full_name || ""
+    const borrowerName = t.borrowers?.name || ""
     const bookTitle = t.books?.title || ""
-    const patronMatch = patronName.toLowerCase().includes(search.patron.toLowerCase())
+    const borrowerMatch = borrowerName.toLowerCase().includes(search.borrower.toLowerCase())
     const bookMatch = bookTitle.toLowerCase().includes(search.book.toLowerCase())
     const dateMatch = search.date
       ? new Date(t.due_date).toISOString().split("T")[0] === search.date
       : true
     const activeStatus = t.status !== "returned"
-    return patronMatch && bookMatch && dateMatch && activeStatus
+    return borrowerMatch && bookMatch && dateMatch && activeStatus
   })
 
   // Filter history transactions based on search
   const filteredHistory = transactions
     .filter(t => {
-      const patronName = t.patrons?.full_name || ""
+      const borrowerName = t.borrowers?.name || ""
       const bookTitle = t.books?.title || ""
-      const patronMatch = patronName.toLowerCase().includes(historySearch.patron.toLowerCase())
+      const borrowerMatch = borrowerName.toLowerCase().includes(historySearch.borrower.toLowerCase())
       const bookMatch = bookTitle.toLowerCase().includes(historySearch.book.toLowerCase())
       const dateFromMatch = historySearch.date_from
         ? new Date(t.created_at) >= new Date(historySearch.date_from)
@@ -317,15 +317,15 @@ export default function TransactionsPage() {
         : true
       const statusMatch = historySearch.status === "all" || t.status === historySearch.status
       
-      return patronMatch && bookMatch && dateFromMatch && dateToMatch && statusMatch
+      return borrowerMatch && bookMatch && dateFromMatch && dateToMatch && statusMatch
     })
     .sort((a, b) => {
       if (sortConfig.key) {
         let aValue, bValue
         
-        if (sortConfig.key === "full_name") {
-          aValue = a.patrons?.full_name || ""
-          bValue = b.patrons?.full_name || ""
+        if (sortConfig.key === "name") {
+          aValue = a.borrowers?.name || ""
+          bValue = b.borrowers?.name || ""
         } else if (sortConfig.key === "title") {
           aValue = a.books?.title || ""
           bValue = b.books?.title || ""
@@ -387,18 +387,18 @@ export default function TransactionsPage() {
               <CardContent>
                 <form onSubmit={handleAddTransaction} className="grid gap-4 md:grid-cols-3">
                   <div className="flex flex-col gap-2">
-                    <Label>Patron</Label>
+                    <Label>Borrower</Label>
                     <Select
                       value={newLoan.patron_id}
                       onValueChange={val => setNewLoan({ ...newLoan, patron_id: val })}
                     >
                       <SelectTrigger>
-                        <SelectValue placeholder="Select patron" />
+                        <SelectValue placeholder="Select borrower" />
                       </SelectTrigger>
                       <SelectContent>
-                        {patrons.map(p => (
-                          <SelectItem key={p.id} value={p.id}>
-                            {p.full_name}
+                        {borrowers.map(b => (
+                          <SelectItem key={b.id} value={b.id}>
+                            {b.name}
                           </SelectItem>
                         ))}
                       </SelectContent>
@@ -448,11 +448,11 @@ export default function TransactionsPage() {
             <Card className="p-4">
               <div className="grid gap-4 md:grid-cols-3">
                 <div className="flex flex-col gap-2">
-                  <Label>Search Patron</Label>
+                  <Label>Search Borrower</Label>
                   <Input
-                    placeholder="Patron name"
-                    value={search.patron}
-                    onChange={e => setSearch({ ...search, patron: e.target.value })}
+                    placeholder="Borrower name"
+                    value={search.borrower}
+                    onChange={e => setSearch({ ...search, borrower: e.target.value })}
                   />
                 </div>
 
@@ -488,7 +488,7 @@ export default function TransactionsPage() {
                 <table className="w-full text-sm">
                   <thead className="bg-muted/50">
                     <tr className="text-left">
-                      <th className="p-3">Patron</th>
+                      <th className="p-3">Borrower</th>
                       <th className="p-3">Book</th>
                       <th className="p-3">Due Date</th>
                       <th className="p-3">Status</th>
@@ -498,7 +498,7 @@ export default function TransactionsPage() {
                   <tbody>
                     {filteredTransactions.map(t => (
                       <tr key={t.id} className="border-t hover:bg-muted/30">
-                        <td className="p-3">{t.patrons?.full_name || "Unknown"}</td>
+                        <td className="p-3">{t.borrowers?.name || "Unknown"}</td>
                         <td className="p-3">{t.books?.title || "Unknown Book"}</td>
                         <td className="p-3">
                           <div className="flex items-center gap-1">
@@ -542,11 +542,11 @@ export default function TransactionsPage() {
             <Card className="p-4">
               <div className="grid gap-4 md:grid-cols-5">
                 <div className="flex flex-col gap-2">
-                  <Label>Patron</Label>
+                  <Label>Borrower</Label>
                   <Input
-                    placeholder="Patron name"
-                    value={historySearch.patron}
-                    onChange={e => setHistorySearch({ ...historySearch, patron: e.target.value })}
+                    placeholder="Borrower name"
+                    value={historySearch.borrower}
+                    onChange={e => setHistorySearch({ ...historySearch, borrower: e.target.value })}
                   />
                 </div>
 
@@ -620,10 +620,10 @@ export default function TransactionsPage() {
                       </th>
                       <th 
                         className="p-3 cursor-pointer hover:bg-muted/70"
-                        onClick={() => handleSort("full_name")}
+                        onClick={() => handleSort("name")}
                       >
                         <div className="flex items-center gap-1">
-                          Patron
+                          Borrower
                           <ArrowUpDown className="h-3 w-3" />
                         </div>
                       </th>
@@ -653,7 +653,7 @@ export default function TransactionsPage() {
                         <td className="p-3">
                           <div className="flex items-center gap-1">
                             <User className="h-3 w-3 text-muted-foreground" />
-                            {t.patrons?.full_name || "Unknown"}
+                            {t.borrowers?.name || "Unknown"}
                           </div>
                         </td>
                         <td className="p-3">
