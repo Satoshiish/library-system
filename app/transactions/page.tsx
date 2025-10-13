@@ -12,6 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { toast } from "sonner"
 import { Search, Calendar, User, Book, ArrowUpDown, AlertTriangle, Clock } from "lucide-react"
+import emailjs from "@emailjs/browser"
 
 interface Transaction {
   id: string
@@ -363,21 +364,44 @@ export default function TransactionsPage() {
     }
   }
 
-  // Send overdue reminder (placeholder function)
   const sendOverdueReminder = async (transaction: Transaction) => {
-    try {
-      // In a real app, this would integrate with an email service
-      console.log(`Sending overdue reminder for transaction: ${transaction.id}`)
-      
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1000))
-      
-      toast.success(`Reminder sent to ${getBorrowerName(transaction)} about "${getBookTitle(transaction)}"`)
-    } catch (error) {
-      console.error("❌ Error sending reminder:", error)
-      toast.error("Failed to send reminder")
+  try {
+    const borrowerEmail = transaction.borrowers?.email
+    const borrowerName = getBorrowerName(transaction)
+    const bookTitle = getBookTitle(transaction)
+    const daysOverdue = getDaysOverdue(transaction)
+    const dueDate = new Date(transaction.due_date).toLocaleDateString()
+
+    if (!borrowerEmail) {
+      toast.error("This borrower has no email address on file.")
+      return
     }
+
+    // ✅ Send the email via EmailJS
+    const response = await emailjs.send(
+      "service_ihzlspf",       // Your EmailJS Service ID
+      "template_w24leai",      // Your EmailJS Template ID
+      {
+        to_email: borrowerEmail,
+        to_name: borrowerName,
+        book_title: bookTitle,
+        days_overdue: daysOverdue,
+        due_date: dueDate,
+        message: `This is a friendly reminder that the book "${bookTitle}" was due on ${dueDate} and is now ${daysOverdue} day(s) overdue. Please return it as soon as possible.`,
+      },
+      "VciD--jXYRWjpdqNe"      // Your EmailJS Public Key
+    )
+
+    if (response.status === 200) {
+      toast.success(`Reminder sent to ${borrowerName} 📧`)
+    } else {
+      toast.error("Failed to send reminder. Please try again.")
+    }
+  } catch (error) {
+    console.error("❌ Email send error:", error)
+    toast.error("Error sending overdue reminder.")
   }
+}
 
   // Add new transaction
   const handleAddTransaction = async (e: React.FormEvent) => {
