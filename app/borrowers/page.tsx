@@ -56,13 +56,13 @@ export default function BorrowersPage() {
     const fetchData = async () => {
       setLoading(true)
       try {
-        // ✅ FIXED: Fetch from patrons table
+        // ✅ FIXED: Fetch from patrons table instead of borrowers
         const { data: patronsData } = await supabase
           .from("patrons")
           .select("*")
           .order("member_since", { ascending: false })
 
-        // ✅ FIXED: Use the EXACT same query as transactions page
+        // ✅ FIXED: Fetch loans with proper joins to patrons
         const { data: loansData } = await supabase
           .from("loans")
           .select(`
@@ -73,16 +73,17 @@ export default function BorrowersPage() {
           .order("created_at", { ascending: false })
 
         console.log("📊 Patrons Data:", patronsData)
-        console.log("📊 Loans Data for Borrowers:", loansData)
+        console.log("📊 Loans Data:", loansData)
 
         // Format patrons data
         const formattedPatrons = (patronsData || []).map(patron => ({
           ...patron,
           joined: patron.member_since || "Unknown",
+          // Map patron status to borrower status for compatibility
           status: patron.status === "archived" ? "inactive" : patron.status
         }))
 
-        // Flatten joined objects for loans - use same structure as transactions
+        // Flatten joined objects for loans
         const flattenedLoans = (loansData || []).map(loan => ({
           id: loan.id,
           status: loan.status,
@@ -90,8 +91,6 @@ export default function BorrowersPage() {
           created_at: loan.created_at,
           loan_date: loan.loan_date,
           returned_date: loan.returned_date,
-          patron_id: loan.patron_id,
-          book_id: loan.book_id,
           patron: loan.patrons 
             ? {
                 id: loan.patrons.id,
@@ -107,10 +106,6 @@ export default function BorrowersPage() {
 
         setBorrowers(formattedPatrons)
         setLoans(flattenedLoans)
-
-        console.log("📊 Final Loans Count:", flattenedLoans.length)
-        console.log("📊 Final Patrons Count:", formattedPatrons.length)
-
       } catch (error) {
         console.error("Failed to fetch data:", error)
       } finally {
@@ -119,29 +114,6 @@ export default function BorrowersPage() {
     }
     fetchData()
   }, [])
-
-  // ✅ FIXED: Use the SAME overdue calculation as transactions page
-  const isOverdue = (loan: any): boolean => {
-    if (loan.status === "returned" || loan.returned_date) {
-      return false
-    }
-    
-    const dueDate = new Date(loan.due_date)
-    const today = new Date()
-    
-    dueDate.setHours(0, 0, 0, 0)
-    today.setHours(0, 0, 0, 0)
-    
-    return dueDate < today
-  }
-
-  // ✅ FIXED: Calculate days overdue - same as transactions
-  const getDaysOverdue = (dueDate: string): number => {
-    const due = new Date(dueDate)
-    const today = new Date()
-    const diffTime = today.getTime() - due.getTime()
-    return Math.max(0, Math.ceil(diffTime / (1000 * 60 * 60 * 24)))
-  }
 
   // ✅ FIXED: Filter borrowers based on search term and status
   const filteredBorrowers = borrowers.filter(b => {
@@ -153,23 +125,45 @@ export default function BorrowersPage() {
     return matchesSearch && matchesStatus
   })
 
-  // ✅ FIXED: Get ALL loans (not filtered by search for accurate counts)
-  const activeLoans = loans.filter(loan => 
+  // ✅ FIXED: Filter loans based on search term
+  const filteredLoans = loans.filter(loan => {
+    const matchesSearch =
+      loan.book?.title?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      loan.patron?.name?.toLowerCase().includes(searchTerm.toLowerCase())
+    return matchesSearch
+  })
+
+  // ✅ FIXED: Get active loans (not returned)
+  const activeLoans = filteredLoans.filter(loan => 
     loan.status === "active" || loan.status === "borrowed"
   )
 
-  // ✅ FIXED: Get overdue loans using SAME logic as transactions
-  const overdueLoans = loans.filter(loan => isOverdue(loan))
+  // ✅ FIXED: Get overdue loans
+  const overdueLoans = filteredLoans.filter(loan => {
+    if (loan.status === "returned" || loan.returned_date) return false
+    
+    const dueDate = new Date(loan.due_date)
+    const today = new Date()
+    dueDate.setHours(0, 0, 0, 0)
+    today.setHours(0, 0, 0, 0)
+    
+    return dueDate < today
+  })
 
-  console.log("📊 Active Loans Count:", activeLoans.length)
-  console.log("📊 Overdue Loans Count:", overdueLoans.length)
-  console.log("📊 Overdue Loan Details:", overdueLoans.map(loan => ({
-    id: loan.id,
-    due_date: loan.due_date,
-    status: loan.status,
-    book_title: loan.book?.title,
-    patron_name: loan.patron?.name
-  })))
+  // ✅ FIXED: Calculate days until due or overdue
+  const getDaysUntilDue = (dueDate: string) => {
+    const due = new Date(dueDate)
+    const today = new Date()
+    const diffTime = due.getTime() - today.getTime()
+    return Math.ceil(diffTime / (1000 * 60 * 60 * 24))
+  }
+
+  const getDaysOverdue = (dueDate: string) => {
+    const due = new Date(dueDate)
+    const today = new Date()
+    const diffTime = today.getTime() - due.getTime()
+    return Math.max(0, Math.ceil(diffTime / (1000 * 60 * 60 * 24)))
+  }
 
   if (loading) {
     return (
@@ -268,16 +262,17 @@ export default function BorrowersPage() {
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                   {filteredBorrowers.map(borrower => {
                     // ✅ FIXED: Get loans for this specific patron
-                    const borrowerLoans = loans.filter(l => l.patron_id === borrower.id)
+                    const borrowerLoans = loans.filter(l => l.patron.id === borrower.id)
                     const borrowerActiveLoans = borrowerLoans.filter(l => 
                       l.status === "active" || l.status === "borrowed"
                     )
-                    const borrowerOverdueLoans = borrowerLoans.filter(loan => isOverdue(loan))
-
-                    console.log(`📊 Borrower ${borrower.full_name}:`, {
-                      totalLoans: borrowerLoans.length,
-                      activeLoans: borrowerActiveLoans.length,
-                      overdueLoans: borrowerOverdueLoans.length
+                    const borrowerOverdueLoans = borrowerLoans.filter(loan => {
+                      if (loan.status === "returned" || loan.returned_date) return false
+                      const dueDate = new Date(loan.due_date)
+                      const today = new Date()
+                      dueDate.setHours(0, 0, 0, 0)
+                      today.setHours(0, 0, 0, 0)
+                      return dueDate < today
                     })
 
                     return (
@@ -333,13 +328,13 @@ export default function BorrowersPage() {
                               <div className="mt-4 space-y-2">
                                 <p className="font-medium text-sm text-foreground">Current Loans:</p>
                                 {borrowerActiveLoans.map(loan => {
-                                  const isLoanOverdue = isOverdue(loan)
+                                  const isOverdue = borrowerOverdueLoans.some(ov => ov.id === loan.id)
                                   return (
                                     <div 
                                       key={loan.id} 
                                       className={cn(
                                         "flex justify-between text-sm p-2 rounded backdrop-blur-sm",
-                                        isLoanOverdue 
+                                        isOverdue 
                                           ? "bg-red-50/50 border border-red-200/50" 
                                           : "bg-green-50/50 border border-green-200/50"
                                       )}
@@ -349,10 +344,10 @@ export default function BorrowersPage() {
                                         variant="outline" 
                                         className={cn(
                                           "text-xs backdrop-blur-sm",
-                                          isLoanOverdue ? "border-red-200 text-red-700" : "border-green-200 text-green-700"
+                                          isOverdue ? "border-red-200 text-red-700" : "border-green-200 text-green-700"
                                         )}
                                       >
-                                        {isLoanOverdue ? "OVERDUE" : "ACTIVE"}
+                                        {isOverdue ? "OVERDUE" : "ACTIVE"}
                                       </Badge>
                                     </div>
                                   )
@@ -385,8 +380,8 @@ export default function BorrowersPage() {
               <TabsContent value="active-loans" className="space-y-6">
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                   {activeLoans.map(loan => {
-                    const daysUntilDue = getDaysOverdue(loan.due_date)
-                    const isLoanOverdue = isOverdue(loan)
+                    const daysUntilDue = getDaysUntilDue(loan.due_date)
+                    const isOverdue = daysUntilDue < 0
                     
                     return (
                       <Card 
@@ -395,7 +390,7 @@ export default function BorrowersPage() {
                           "backdrop-blur-sm border-border/30 bg-gradient-to-b from-background/50 to-background/30",
                           "hover:shadow-lg hover:shadow-indigo-500/10 transition-all duration-300",
                           "hover:scale-[1.02] hover:border-indigo-300/50",
-                          isLoanOverdue && "border-red-200/50 bg-red-50/10"
+                          isOverdue && "border-red-200/50 bg-red-50/10"
                         )}
                       >
                         <CardHeader>
@@ -405,9 +400,9 @@ export default function BorrowersPage() {
                             </div>
                             <Badge className={cn(
                               "backdrop-blur-sm",
-                              isLoanOverdue ? "bg-red-100 text-red-800 border-red-200" : "bg-blue-100 text-blue-800 border-blue-200"
+                              isOverdue ? "bg-red-100 text-red-800 border-red-200" : "bg-blue-100 text-blue-800 border-blue-200"
                             )}>
-                              {isLoanOverdue ? "OVERDUE" : "ACTIVE"}
+                              {isOverdue ? "OVERDUE" : "ACTIVE"}
                             </Badge>
                           </div>
                           <CardTitle className="text-lg text-foreground">{loan.book?.title}</CardTitle>
@@ -425,18 +420,18 @@ export default function BorrowersPage() {
                             </div>
                             <div className={cn(
                               "text-center p-3 rounded-lg backdrop-blur-sm mt-2",
-                              isLoanOverdue 
+                              isOverdue 
                                 ? "bg-red-50/50 border border-red-200/50" 
                                 : "bg-blue-50/50 border border-blue-200/50"
                             )}>
                               <div className={cn(
                                 "text-2xl font-bold",
-                                isLoanOverdue ? "text-red-600" : "text-blue-600"
+                                isOverdue ? "text-red-600" : "text-blue-600"
                               )}>
-                                {isLoanOverdue ? daysUntilDue : Math.abs(daysUntilDue)}
+                                {isOverdue ? Math.abs(daysUntilDue) : daysUntilDue}
                               </div>
                               <div className="text-xs text-muted-foreground">
-                                {isLoanOverdue ? "Days Overdue" : "Days Until Due"}
+                                {isOverdue ? "Days Overdue" : "Days Until Due"}
                               </div>
                             </div>
                           </div>
