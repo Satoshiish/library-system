@@ -379,7 +379,7 @@ export default function TransactionsPage() {
 
     // ✅ Send the email via EmailJS
     const response = await emailjs.send(
-      "service_ihzlspf",       // Your EmailJS Service ID
+      "service_1lboc1u",       // Your EmailJS Service ID
       "template_w24leai",      // Your EmailJS Template ID
       {
         to_email: borrowerEmail,
