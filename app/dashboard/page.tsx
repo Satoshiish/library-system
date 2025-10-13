@@ -394,24 +394,6 @@ export default function DashboardPage() {
               </Card>
             </div>
 
-            {/* Debug Info - Remove in production */}
-            <Card className="bg-yellow-50 border-yellow-200">
-              <CardHeader>
-                <CardTitle className="text-yellow-800 text-sm">Debug Information</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <pre className="text-xs text-yellow-700">
-                  {JSON.stringify({
-                    totalBooks: dashboardStats.totalBooks,
-                    availableBooks: dashboardStats.availableBooks,
-                    checkedOutBooks: dashboardStats.checkedOutBooks,
-                    overdueBooks: dashboardStats.overdueBooks,
-                    overdueBooksList: overdueBooks,
-                    recentActivity: recentActivity.length
-                  }, null, 2)}
-                </pre>
-              </CardContent>
-            </Card>
 
             {/* Additional Stats Cards */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">

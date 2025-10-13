@@ -52,60 +52,104 @@ export default function BorrowersPage() {
   const [activeTab, setActiveTab] = useState("borrowers")
   const [loading, setLoading] = useState(true)
 
+  // Overdue calculation function
+  const isOverdue = (loan: any): boolean => {
+    // Skip returned loans
+    if (loan.status === "returned" || loan.returned_date) {
+      return false
+    }
+
+    // Determine due date
+    let dueDate: Date | null = null
+    
+    if (loan.due_date) {
+      dueDate = new Date(loan.due_date)
+    } else if (loan.doc_date) {
+      dueDate = new Date(loan.doc_date)
+    } else if (loan.created_at) {
+      // Default to created_at + 14 days if no due date
+      dueDate = new Date(loan.created_at)
+      dueDate.setDate(dueDate.getDate() + 14)
+    }
+
+    if (!dueDate || isNaN(dueDate.getTime())) {
+      return false
+    }
+
+    const today = new Date()
+    dueDate.setHours(0, 0, 0, 0)
+    today.setHours(0, 0, 0, 0)
+    
+    return dueDate < today
+  }
+
+  // Calculate days overdue
+  const getDaysOverdue = (loan: any): number => {
+    const dueDate = loan.due_date ? new Date(loan.due_date) : 
+                   loan.doc_date ? new Date(loan.doc_date) : 
+                   new Date(loan.created_at)
+    
+    // Add default loan period if no specific due date
+    if (!loan.doc_date && !loan.due_date) {
+      dueDate.setDate(dueDate.getDate() + 14)
+    }
+    
+    const today = new Date()
+    const diffTime = today.getTime() - dueDate.getTime()
+    return Math.max(0, Math.ceil(diffTime / (1000 * 60 * 60 * 24)))
+  }
+
   useEffect(() => {
     const fetchData = async () => {
       setLoading(true)
       try {
-        // ✅ FIXED: Fetch from patrons table instead of borrowers
+        // Fetch patrons
         const { data: patronsData } = await supabase
           .from("patrons")
           .select("*")
           .order("member_since", { ascending: false })
 
-        // ✅ FIXED: Fetch loans with proper joins to patrons
+        // Fetch loans with proper joins
         const { data: loansData } = await supabase
           .from("loans")
           .select(`
             *,
-            patrons:patron_id (id, full_name, email, phone, status, member_since),
-            books:book_id (id, title, author, category)
+            patrons (*),
+            books (*)
           `)
           .order("created_at", { ascending: false })
-
-        console.log("📊 Patrons Data:", patronsData)
-        console.log("📊 Loans Data:", loansData)
 
         // Format patrons data
         const formattedPatrons = (patronsData || []).map(patron => ({
           ...patron,
-          joined: patron.member_since || "Unknown",
-          // Map patron status to borrower status for compatibility
           status: patron.status === "archived" ? "inactive" : patron.status
         }))
 
-        // Flatten joined objects for loans
-        const flattenedLoans = (loansData || []).map(loan => ({
+        // Format loans data
+        const formattedLoans = (loansData || []).map(loan => ({
           id: loan.id,
           status: loan.status,
           due_date: loan.due_date,
+          doc_date: loan.doc_date,
           created_at: loan.created_at,
           loan_date: loan.loan_date,
           returned_date: loan.returned_date,
-          patron: loan.patrons 
-            ? {
-                id: loan.patrons.id,
-                name: loan.patrons.full_name,
-                email: loan.patrons.email,
-                phone: loan.patrons.phone,
-                status: loan.patrons.status,
-                joined: loan.patrons.member_since,
-              }
-            : { name: "Unknown", email: "Unknown", joined: "Unknown" },
+          patron_id: loan.patron_id,
+          book_id: loan.book_id,
+          patron: loan.patrons ? {
+            id: loan.patrons.id,
+            name: loan.patrons.full_name,
+            email: loan.patrons.email,
+            phone: loan.patrons.phone,
+            status: loan.patrons.status,
+            joined: loan.patrons.member_since,
+          } : { name: "Unknown Patron", email: "Unknown", joined: "Unknown" },
           book: loan.books,
         }))
 
         setBorrowers(formattedPatrons)
-        setLoans(flattenedLoans)
+        setLoans(formattedLoans)
+
       } catch (error) {
         console.error("Failed to fetch data:", error)
       } finally {
@@ -115,7 +159,7 @@ export default function BorrowersPage() {
     fetchData()
   }, [])
 
-  // ✅ FIXED: Filter borrowers based on search term and status
+  // Filter borrowers based on search term and status
   const filteredBorrowers = borrowers.filter(b => {
     const matchesSearch =
       b.full_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -125,44 +169,29 @@ export default function BorrowersPage() {
     return matchesSearch && matchesStatus
   })
 
-  // ✅ FIXED: Filter loans based on search term
-  const filteredLoans = loans.filter(loan => {
-    const matchesSearch =
-      loan.book?.title?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      loan.patron?.name?.toLowerCase().includes(searchTerm.toLowerCase())
-    return matchesSearch
-  })
-
-  // ✅ FIXED: Get active loans (not returned)
-  const activeLoans = filteredLoans.filter(loan => 
-    loan.status === "active" || loan.status === "borrowed"
+  // Get active loans (not returned)
+  const activeLoans = loans.filter(loan => 
+    loan.status !== "returned" && !loan.returned_date
   )
 
-  // ✅ FIXED: Get overdue loans
-  const overdueLoans = filteredLoans.filter(loan => {
-    if (loan.status === "returned" || loan.returned_date) return false
-    
-    const dueDate = new Date(loan.due_date)
-    const today = new Date()
-    dueDate.setHours(0, 0, 0, 0)
-    today.setHours(0, 0, 0, 0)
-    
-    return dueDate < today
-  })
+  // Get overdue loans
+  const overdueLoans = loans.filter(loan => isOverdue(loan))
 
-  // ✅ FIXED: Calculate days until due or overdue
-  const getDaysUntilDue = (dueDate: string) => {
-    const due = new Date(dueDate)
-    const today = new Date()
-    const diffTime = due.getTime() - today.getTime()
-    return Math.ceil(diffTime / (1000 * 60 * 60 * 24))
+  // Get loans by patron
+  const getLoansByPatron = (patronId: string) => {
+    return loans.filter(loan => loan.patron_id === patronId)
   }
 
-  const getDaysOverdue = (dueDate: string) => {
-    const due = new Date(dueDate)
-    const today = new Date()
-    const diffTime = today.getTime() - due.getTime()
-    return Math.max(0, Math.ceil(diffTime / (1000 * 60 * 60 * 24)))
+  // Get active loans by patron
+  const getActiveLoansByPatron = (patronId: string) => {
+    return getLoansByPatron(patronId).filter(loan => 
+      loan.status !== "returned" && !loan.returned_date
+    )
+  }
+
+  // Get overdue loans by patron
+  const getOverdueLoansByPatron = (patronId: string) => {
+    return getLoansByPatron(patronId).filter(loan => isOverdue(loan))
   }
 
   if (loading) {
@@ -185,9 +214,9 @@ export default function BorrowersPage() {
             {/* Header */}
             <div className="mb-4">
               <h1 className="text-3xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">
-                Borrowers
+                Patrons
               </h1>
-              <p className="text-muted-foreground">Manage library members and track borrowed books</p>
+              <p className="text-muted-foreground">Manage library patrons and track borrowed books</p>
             </div>
 
             {/* Search & Filter */}
@@ -196,7 +225,7 @@ export default function BorrowersPage() {
                 <CardTitle className="bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">
                   Search & Filter
                 </CardTitle>
-                <CardDescription>Find borrowers and track their loans</CardDescription>
+                <CardDescription>Find patrons and track their loans</CardDescription>
               </CardHeader>
               <CardContent>
                 <div className="flex flex-col sm:flex-row gap-4">
@@ -205,7 +234,7 @@ export default function BorrowersPage() {
                       <Search className="h-5 w-5 text-indigo-600" />
                     </div>
                     <Input
-                      placeholder="Search borrowers, books, or emails..."
+                      placeholder="Search by name, email, or phone..."
                       value={searchTerm}
                       onChange={e => setSearchTerm(e.target.value)}
                       className="pl-11 bg-background/50 border-border/50 focus:border-indigo-300 transition-colors h-11"
@@ -239,7 +268,7 @@ export default function BorrowersPage() {
                   className="flex items-center gap-2 data-[state=active]:bg-gradient-to-r data-[state=active]:from-indigo-500 data-[state=active]:to-purple-500 data-[state=active]:text-white"
                 >
                   <Users className="h-4 w-4" />
-                  Borrowers ({filteredBorrowers.length})
+                  Patrons ({filteredBorrowers.length})
                 </TabsTrigger>
                 <TabsTrigger 
                   value="active-loans"
@@ -257,27 +286,17 @@ export default function BorrowersPage() {
                 </TabsTrigger>
               </TabsList>
 
-              {/* Borrowers Tab */}
+              {/* Patrons Tab */}
               <TabsContent value="borrowers" className="space-y-6">
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                  {filteredBorrowers.map(borrower => {
-                    // ✅ FIXED: Get loans for this specific patron
-                    const borrowerLoans = loans.filter(l => l.patron.id === borrower.id)
-                    const borrowerActiveLoans = borrowerLoans.filter(l => 
-                      l.status === "active" || l.status === "borrowed"
-                    )
-                    const borrowerOverdueLoans = borrowerLoans.filter(loan => {
-                      if (loan.status === "returned" || loan.returned_date) return false
-                      const dueDate = new Date(loan.due_date)
-                      const today = new Date()
-                      dueDate.setHours(0, 0, 0, 0)
-                      today.setHours(0, 0, 0, 0)
-                      return dueDate < today
-                    })
+                  {filteredBorrowers.map(patron => {
+                    const patronLoans = getLoansByPatron(patron.id)
+                    const patronActiveLoans = getActiveLoansByPatron(patron.id)
+                    const patronOverdueLoans = getOverdueLoansByPatron(patron.id)
 
                     return (
                       <Card 
-                        key={borrower.id} 
+                        key={patron.id} 
                         className={cn(
                           "backdrop-blur-sm border-border/30 bg-gradient-to-b from-background/50 to-background/30",
                           "hover:shadow-lg hover:shadow-indigo-500/10 transition-all duration-300",
@@ -289,73 +308,84 @@ export default function BorrowersPage() {
                             <div className="p-2 rounded-lg bg-gradient-to-tr from-indigo-500/20 to-purple-500/20">
                               <User className="h-5 w-5 text-indigo-600" />
                             </div>
-                            <Badge className={cn("backdrop-blur-sm border", statusColors[borrower.status])}>
-                              {borrower.status?.toUpperCase() || "UNKNOWN"}
+                            <Badge className={cn("backdrop-blur-sm border", statusColors[patron.status] || statusColors.inactive)}>
+                              {patron.status?.toUpperCase() || "UNKNOWN"}
                             </Badge>
                           </div>
-                          <CardTitle className="text-lg text-foreground">{borrower.full_name}</CardTitle>
-                          <CardDescription>Member since {borrower.member_since || "Unknown"}</CardDescription>
+                          <CardTitle className="text-lg text-foreground">{patron.full_name}</CardTitle>
+                          <CardDescription>
+                            Member since {patron.member_since ? new Date(patron.member_since).toLocaleDateString() : "Unknown"}
+                          </CardDescription>
                         </CardHeader>
                         <CardContent>
                           <div className="space-y-3">
                             <div className="flex items-center gap-2 text-sm">
                               <Mail className="h-4 w-4 text-indigo-600" />
-                              <span className="truncate">{borrower.email}</span>
+                              <span className="truncate">{patron.email}</span>
                             </div>
                             <div className="flex items-center gap-2 text-sm">
                               <Phone className="h-4 w-4 text-indigo-600" />
-                              <span>{borrower.phone || "No phone"}</span>
+                              <span>{patron.phone || "No phone"}</span>
                             </div>
                             <div className="flex items-center gap-2 text-sm">
                               <Calendar className="h-4 w-4 text-indigo-600" />
-                              <span>Joined {borrower.member_since || "Unknown"}</span>
+                              <span>Joined {patron.member_since ? new Date(patron.member_since).toLocaleDateString() : "Unknown"}</span>
                             </div>
 
-                            {/* Borrower loans */}
-                            <div className="grid grid-cols-2 gap-4 pt-2">
-                              <div className="text-center p-3 bg-green-50/50 rounded-lg backdrop-blur-sm">
-                                <div className="text-2xl font-bold text-green-600">{borrowerActiveLoans.length}</div>
-                                <div className="text-xs text-muted-foreground">Active Loans</div>
+                            {/* Patron loans summary */}
+                            <div className="grid grid-cols-3 gap-2 pt-2">
+                              <div className="text-center p-2 bg-blue-50/50 rounded-lg backdrop-blur-sm">
+                                <div className="text-lg font-bold text-blue-600">{patronLoans.length}</div>
+                                <div className="text-xs text-muted-foreground">Total</div>
                               </div>
-                              <div className="text-center p-3 bg-red-50/50 rounded-lg backdrop-blur-sm">
-                                <div className="text-2xl font-bold text-red-600">{borrowerOverdueLoans.length}</div>
+                              <div className="text-center p-2 bg-green-50/50 rounded-lg backdrop-blur-sm">
+                                <div className="text-lg font-bold text-green-600">{patronActiveLoans.length}</div>
+                                <div className="text-xs text-muted-foreground">Active</div>
+                              </div>
+                              <div className="text-center p-2 bg-red-50/50 rounded-lg backdrop-blur-sm">
+                                <div className="text-lg font-bold text-red-600">{patronOverdueLoans.length}</div>
                                 <div className="text-xs text-muted-foreground">Overdue</div>
                               </div>
                             </div>
 
-                            {/* List books */}
-                            {borrowerActiveLoans.length > 0 && (
+                            {/* Current active loans */}
+                            {patronActiveLoans.length > 0 && (
                               <div className="mt-4 space-y-2">
                                 <p className="font-medium text-sm text-foreground">Current Loans:</p>
-                                {borrowerActiveLoans.map(loan => {
-                                  const isOverdue = borrowerOverdueLoans.some(ov => ov.id === loan.id)
+                                {patronActiveLoans.slice(0, 3).map(loan => {
+                                  const isLoanOverdue = isOverdue(loan)
                                   return (
                                     <div 
                                       key={loan.id} 
                                       className={cn(
                                         "flex justify-between text-sm p-2 rounded backdrop-blur-sm",
-                                        isOverdue 
+                                        isLoanOverdue 
                                           ? "bg-red-50/50 border border-red-200/50" 
                                           : "bg-green-50/50 border border-green-200/50"
                                       )}
                                     >
-                                      <span className="truncate">{loan.book?.title || "Unknown Book"}</span>
+                                      <span className="truncate flex-1">{loan.book?.title || "Unknown Book"}</span>
                                       <Badge 
                                         variant="outline" 
                                         className={cn(
-                                          "text-xs backdrop-blur-sm",
-                                          isOverdue ? "border-red-200 text-red-700" : "border-green-200 text-green-700"
+                                          "text-xs backdrop-blur-sm whitespace-nowrap",
+                                          isLoanOverdue ? "border-red-200 text-red-700" : "border-green-200 text-green-700"
                                         )}
                                       >
-                                        {isOverdue ? "OVERDUE" : "ACTIVE"}
+                                        {isLoanOverdue ? `Overdue ${getDaysOverdue(loan)}d` : "Active"}
                                       </Badge>
                                     </div>
                                   )
                                 })}
+                                {patronActiveLoans.length > 3 && (
+                                  <div className="text-center text-xs text-muted-foreground">
+                                    +{patronActiveLoans.length - 3} more loans
+                                  </div>
+                                )}
                               </div>
                             )}
 
-                            {borrowerActiveLoans.length === 0 && (
+                            {patronActiveLoans.length === 0 && (
                               <div className="text-center p-3 bg-gray-50/50 rounded-lg backdrop-blur-sm mt-4">
                                 <p className="text-sm text-muted-foreground">No active loans</p>
                               </div>
@@ -380,8 +410,8 @@ export default function BorrowersPage() {
               <TabsContent value="active-loans" className="space-y-6">
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                   {activeLoans.map(loan => {
-                    const daysUntilDue = getDaysUntilDue(loan.due_date)
-                    const isOverdue = daysUntilDue < 0
+                    const daysOverdue = getDaysOverdue(loan)
+                    const isLoanOverdue = isOverdue(loan)
                     
                     return (
                       <Card 
@@ -390,7 +420,7 @@ export default function BorrowersPage() {
                           "backdrop-blur-sm border-border/30 bg-gradient-to-b from-background/50 to-background/30",
                           "hover:shadow-lg hover:shadow-indigo-500/10 transition-all duration-300",
                           "hover:scale-[1.02] hover:border-indigo-300/50",
-                          isOverdue && "border-red-200/50 bg-red-50/10"
+                          isLoanOverdue && "border-red-200/50 bg-red-50/10"
                         )}
                       >
                         <CardHeader>
@@ -400,13 +430,17 @@ export default function BorrowersPage() {
                             </div>
                             <Badge className={cn(
                               "backdrop-blur-sm",
-                              isOverdue ? "bg-red-100 text-red-800 border-red-200" : "bg-blue-100 text-blue-800 border-blue-200"
+                              isLoanOverdue ? "bg-red-100 text-red-800 border-red-200" : "bg-blue-100 text-blue-800 border-blue-200"
                             )}>
-                              {isOverdue ? "OVERDUE" : "ACTIVE"}
+                              {isLoanOverdue ? "OVERDUE" : "ACTIVE"}
                             </Badge>
                           </div>
-                          <CardTitle className="text-lg text-foreground">{loan.book?.title}</CardTitle>
-                          <CardDescription>Borrower: {loan.patron?.name}</CardDescription>
+                          <CardTitle className="text-lg text-foreground line-clamp-2">
+                            {loan.book?.title || "Unknown Book"}
+                          </CardTitle>
+                          <CardDescription className="line-clamp-1">
+                            Patron: {loan.patron?.name}
+                          </CardDescription>
                         </CardHeader>
                         <CardContent>
                           <div className="space-y-3 text-sm">
@@ -416,22 +450,27 @@ export default function BorrowersPage() {
                             </div>
                             <div className="flex items-center gap-2">
                               <Calendar className="h-4 w-4 text-indigo-600" />
-                              <span>Due: {new Date(loan.due_date).toLocaleDateString()}</span>
+                              <span>
+                                {loan.due_date 
+                                  ? `Due: ${new Date(loan.due_date).toLocaleDateString()}`
+                                  : `Borrowed: ${new Date(loan.created_at).toLocaleDateString()}`
+                                }
+                              </span>
                             </div>
                             <div className={cn(
                               "text-center p-3 rounded-lg backdrop-blur-sm mt-2",
-                              isOverdue 
+                              isLoanOverdue 
                                 ? "bg-red-50/50 border border-red-200/50" 
                                 : "bg-blue-50/50 border border-blue-200/50"
                             )}>
                               <div className={cn(
                                 "text-2xl font-bold",
-                                isOverdue ? "text-red-600" : "text-blue-600"
+                                isLoanOverdue ? "text-red-600" : "text-blue-600"
                               )}>
-                                {isOverdue ? Math.abs(daysUntilDue) : daysUntilDue}
+                                {isLoanOverdue ? daysOverdue : "Active"}
                               </div>
                               <div className="text-xs text-muted-foreground">
-                                {isOverdue ? "Days Overdue" : "Days Until Due"}
+                                {isLoanOverdue ? "Days Overdue" : "Currently Borrowed"}
                               </div>
                             </div>
                           </div>
@@ -440,10 +479,12 @@ export default function BorrowersPage() {
                     )
                   })}
                   {activeLoans.length === 0 && (
-                    <div className="col-span-full text-center py-8">
-                      <BookCheck className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                    <div className="col-span-full text-center py-12">
+                      <BookCheck className="h-16 w-16 text-muted-foreground mx-auto mb-4 opacity-50" />
                       <h3 className="text-lg font-medium text-foreground mb-2">No Active Loans</h3>
-                      <p className="text-muted-foreground">There are currently no active book loans.</p>
+                      <p className="text-muted-foreground max-w-md mx-auto">
+                        There are currently no active book loans. All books have been returned or no loans have been created yet.
+                      </p>
                     </div>
                   )}
                 </div>
@@ -452,10 +493,10 @@ export default function BorrowersPage() {
               {/* Overdue Loans Tab */}
               <TabsContent value="overdue" className="space-y-6">
                 {overdueLoans.length === 0 ? (
-                  <Card className="backdrop-blur-xl border-border/30 text-center py-8">
-                    <Clock className="h-12 w-12 text-green-500 mx-auto mb-4" />
+                  <Card className="backdrop-blur-xl border-green-200/50 bg-gradient-to-b from-green-50/10 to-green-50/5 text-center py-12">
+                    <Clock className="h-16 w-16 text-green-500 mx-auto mb-4" />
                     <h3 className="text-lg font-medium text-foreground mb-2">No Overdue Items</h3>
-                    <p className="text-muted-foreground">
+                    <p className="text-muted-foreground max-w-md mx-auto">
                       Great! All items have been returned on time or are not yet due.
                     </p>
                   </Card>
@@ -468,6 +509,9 @@ export default function BorrowersPage() {
                           <AlertTriangle className="h-5 w-5" />
                           Overdue Items Summary
                         </CardTitle>
+                        <CardDescription>
+                          {overdueLoans.length} item{overdueLoans.length !== 1 ? 's' : ''} currently overdue
+                        </CardDescription>
                       </CardHeader>
                       <CardContent>
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -479,15 +523,15 @@ export default function BorrowersPage() {
                           </div>
                           <div className="text-center p-4 bg-orange-50/50 rounded-lg backdrop-blur-sm border border-orange-200/50">
                             <div className="text-2xl font-bold text-orange-600">
-                              {overdueLoans.filter(loan => getDaysOverdue(loan.due_date) <= 7).length}
+                              {overdueLoans.filter(loan => getDaysOverdue(loan) <= 7).length}
                             </div>
-                            <div className="text-sm text-muted-foreground">1-7 Days Overdue</div>
+                            <div className="text-sm text-muted-foreground">1-7 Days</div>
                           </div>
                           <div className="text-center p-4 bg-red-100/50 rounded-lg backdrop-blur-sm border border-red-300/50">
                             <div className="text-2xl font-bold text-red-700">
-                              {overdueLoans.filter(loan => getDaysOverdue(loan.due_date) > 7).length}
+                              {overdueLoans.filter(loan => getDaysOverdue(loan) > 7).length}
                             </div>
-                            <div className="text-sm text-muted-foreground">8+ Days Overdue</div>
+                            <div className="text-sm text-muted-foreground">8+ Days</div>
                           </div>
                         </div>
                       </CardContent>
@@ -496,7 +540,7 @@ export default function BorrowersPage() {
                     {/* Overdue Items Grid */}
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                       {overdueLoans
-                        .sort((a, b) => getDaysOverdue(b.due_date) - getDaysOverdue(a.due_date))
+                        .sort((a, b) => getDaysOverdue(b) - getDaysOverdue(a))
                         .map(loan => (
                         <Card 
                           key={loan.id} 
@@ -511,10 +555,16 @@ export default function BorrowersPage() {
                               <div className="p-2 rounded-lg bg-gradient-to-tr from-red-500/20 to-orange-500/20">
                                 <Clock className="h-5 w-5 text-red-600" />
                               </div>
-                              <Badge className="bg-red-100 text-red-800 border-red-200 backdrop-blur-sm">OVERDUE</Badge>
+                              <Badge className="bg-red-100 text-red-800 border-red-200 backdrop-blur-sm">
+                                OVERDUE
+                              </Badge>
                             </div>
-                            <CardTitle className="text-lg text-foreground">{loan.book?.title}</CardTitle>
-                            <CardDescription>Borrower: {loan.patron?.name}</CardDescription>
+                            <CardTitle className="text-lg text-foreground line-clamp-2">
+                              {loan.book?.title || "Unknown Book"}
+                            </CardTitle>
+                            <CardDescription className="line-clamp-1">
+                              Patron: {loan.patron?.name}
+                            </CardDescription>
                           </CardHeader>
                           <CardContent>
                             <div className="space-y-3 text-sm">
@@ -524,11 +574,16 @@ export default function BorrowersPage() {
                               </div>
                               <div className="flex items-center gap-2">
                                 <Calendar className="h-4 w-4 text-red-600" />
-                                <span>Due: {new Date(loan.due_date).toLocaleDateString()}</span>
+                                <span>
+                                  {loan.due_date 
+                                    ? `Due: ${new Date(loan.due_date).toLocaleDateString()}`
+                                    : `Borrowed: ${new Date(loan.created_at).toLocaleDateString()}`
+                                  }
+                                </span>
                               </div>
-                              <div className="text-center p-3 bg-red-50/50 rounded-lg backdrop-blur-sm mt-2">
+                              <div className="text-center p-3 bg-red-50/50 rounded-lg backdrop-blur-sm mt-2 border border-red-200/50">
                                 <div className="text-2xl font-bold text-red-600">
-                                  {getDaysOverdue(loan.due_date)}
+                                  {getDaysOverdue(loan)}
                                 </div>
                                 <div className="text-xs text-muted-foreground">Days Overdue</div>
                               </div>
