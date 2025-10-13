@@ -25,7 +25,6 @@ const navigation = [
   { name: "Borrowers", href: "/borrowers", icon: Users },
   { name: "Patrons", href: "/patron", icon: UserPlus },
   { name: "Transactions", href: "/transactions", icon: BookCopy },
-  { name: "Search", href: "/search", icon: Search },
 ]
 
 export function Sidebar() {

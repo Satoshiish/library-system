@@ -7,12 +7,14 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { toast } from "sonner"
-import { Search, Calendar, User, Book, ArrowUpDown, AlertTriangle, Clock } from "lucide-react"
+import { Search, Calendar, User, Book, ArrowUpDown, AlertTriangle, Clock, Plus, Loader2, Filter, History, Activity, Mail } from "lucide-react"
 import emailjs from "@emailjs/browser"
+import { cn } from "@/lib/utils"
+import { AuthGuard } from "@/components/auth-guard"
 
 interface Transaction {
   id: string
@@ -54,10 +56,11 @@ export default function TransactionsPage() {
     date_to: "",
     status: "all"
   })
-  const [sortConfig, setSortConfig] = useState({ key: "due_date", direction: "asc" }) // Default sort by due date ascending
+  const [sortConfig, setSortConfig] = useState({ key: "due_date", direction: "asc" })
+  const [submitting, setSubmitting] = useState(false)
 
-    // Fetch data with proper error handling
-    useEffect(() => {
+  // Fetch data with proper error handling
+  useEffect(() => {
     const fetchData = async () => {
       try {
         setLoading(true);
@@ -69,7 +72,6 @@ export default function TransactionsPage() {
           { data: borrowersData, error: borrowersError },
           { data: booksData, error: booksError },
         ] = await Promise.all([
-          // ✅ Fetch loans with both borrowers + books joined
           supabase
             .from("loans")
             .select(`
@@ -97,24 +99,20 @@ export default function TransactionsPage() {
             `)
             .order("created_at", { ascending: false }),
 
-          // ✅ Fetch borrowers
           supabase
             .from("borrowers")
             .select("id, name, email, phone, status")
             .order("name"),
 
-          // ✅ Fetch all books (not just available ones, in case you need full list)
           supabase
             .from("books")
             .select("id, title, author, isbn, category, status")
             .order("title"),
         ]);
 
-        // 🧩 Handle LOANS
+        // Handle LOANS
         if (loansError) {
           console.error("❌ Loans join error:", loansError);
-
-          // fallback: fetch simple loans and manually merge data
           const { data: simpleLoans, error: simpleError } = await supabase
             .from("loans")
             .select("*")
@@ -124,13 +122,9 @@ export default function TransactionsPage() {
             console.error("❌ Simple loans error:", simpleError);
             setTransactions([]);
           } else {
-            console.log("📋 Loans without joins:", simpleLoans);
             setTransactions(simpleLoans || []);
           }
         } else {
-          console.log("✅ Loans with joins:", loansData);
-
-          // optional: sanity check to ensure book titles exist
           const enhancedLoans = loansData?.map((loan) => ({
             ...loan,
             book_title:
@@ -142,21 +136,18 @@ export default function TransactionsPage() {
           setTransactions(enhancedLoans || []);
         }
 
-        // 🧩 Handle BORROWERS
+        // Handle BORROWERS and BOOKS
         if (borrowersError) {
           console.error("❌ Borrowers error:", borrowersError);
           setBorrowers([]);
         } else {
-          console.log("✅ Borrowers:", borrowersData);
           setBorrowers(borrowersData || []);
         }
 
-        // 🧩 Handle BOOKS
         if (booksError) {
           console.error("❌ Books error:", booksError);
           setBooks([]);
         } else {
-          console.log("✅ Books:", booksData);
           setBooks(booksData || []);
         }
       } catch (error) {
@@ -172,16 +163,13 @@ export default function TransactionsPage() {
 
   // Function to check if a transaction is overdue
   const isOverdue = (transaction: Transaction): boolean => {
-    // If already returned, not overdue
     if (transaction.status === "returned" || transaction.returned_date) {
       return false
     }
     
-    // Compare due date with current date
     const dueDate = new Date(transaction.due_date)
     const today = new Date()
     
-    // Set both dates to start of day for accurate comparison
     dueDate.setHours(0, 0, 0, 0)
     today.setHours(0, 0, 0, 0)
     
@@ -195,7 +183,6 @@ export default function TransactionsPage() {
     const dueDate = new Date(transaction.due_date)
     const today = new Date()
     
-    // Calculate difference in days
     const diffTime = today.getTime() - dueDate.getTime()
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
     
@@ -221,12 +208,10 @@ export default function TransactionsPage() {
   // Function to manually link data when joins fail
   const getEnhancedTransactions = () => {
     return transactions.map(transaction => {
-      // If joins already worked, return as is
       if (transaction.borrowers && transaction.books) {
         return transaction
       }
 
-      // Otherwise, manually link the data
       const borrower = borrowers.find(b => b.id === transaction.patron_id)
       const book = books.find(b => b.id === transaction.book_id)
       
@@ -240,35 +225,29 @@ export default function TransactionsPage() {
 
   // Enhanced function to get borrower name with multiple fallbacks
   const getBorrowerName = (transaction: Transaction) => {
-    // Try joined data first
     if (transaction.borrowers?.name) {
       return transaction.borrowers.name
     }
     
-    // Try local borrowers array
     const borrower = borrowers.find(b => b.id === transaction.patron_id)
     if (borrower?.name) {
       return borrower.name
     }
     
-    // Final fallback
     return `Borrower #${transaction.patron_id?.substring(0, 8)}...`
   }
 
   // Enhanced function to get book title with multiple fallbacks
   const getBookTitle = (transaction: Transaction) => {
-    // Try joined data first
     if (transaction.books?.title) {
       return transaction.books.title
     }
     
-    // Try local books array
     const book = books.find(b => b.id === transaction.book_id)
     if (book?.title) {
       return book.title
     }
     
-    // Final fallback
     return `Book #${transaction.book_id?.substring(0, 8)}...`
   }
 
@@ -282,34 +261,22 @@ export default function TransactionsPage() {
     try {
       toast.loading("Checking data relationships...")
       
-      // Get sample data to check relationships
-      const { data: sampleLoans, error: loansError } = await supabase
-        .from("loans")
-        .select("id, patron_id, book_id, due_date, status")
-        .limit(5)
+      const [
+        { data: sampleLoans, error: loansError },
+        { data: sampleBorrowers, error: borrowersError },
+        { data: sampleBooks, error: booksError },
+      ] = await Promise.all([
+        supabase.from("loans").select("id, patron_id, book_id, due_date, status").limit(5),
+        supabase.from("borrowers").select("id, name").limit(5),
+        supabase.from("books").select("id, title").limit(5),
+      ])
 
       if (loansError) throw loansError
-
-      const { data: sampleBorrowers, error: borrowersError } = await supabase
-        .from("borrowers")
-        .select("id, name")
-        .limit(5)
-
       if (borrowersError) throw borrowersError
-
-      const { data: sampleBooks, error: booksError } = await supabase
-        .from("books")
-        .select("id, title")
-        .limit(5)
-
       if (booksError) throw booksError
 
-      console.log("🔍 DATA RELATIONSHIP CHECK:")
-      console.log("Sample Loans:", sampleLoans)
-      console.log("Sample Borrowers:", sampleBorrowers)
-      console.log("Sample Books:", sampleBooks)
+      console.log("🔍 DATA RELATIONSHIP CHECK:", { sampleLoans, sampleBorrowers, sampleBooks })
 
-      // Check if patron_ids in loans exist in borrowers
       if (sampleLoans && sampleBorrowers) {
         const borrowerIds = sampleBorrowers.map(b => b.id)
         const invalidLoans = sampleLoans.filter(loan => !borrowerIds.includes(loan.patron_id))
@@ -339,7 +306,6 @@ export default function TransactionsPage() {
 
       if (loanUpdateError) throw loanUpdateError
 
-      // Update local state
       setTransactions(prev =>
         prev.map(t => t.id === loanId ? { ...t, status: "active" } : t)
       )
@@ -366,7 +332,6 @@ export default function TransactionsPage() {
 
       if (loanUpdateError) throw loanUpdateError
 
-      // Update local state
       setTransactions(prev =>
         prev.map(t => t.id === loanId ? { 
           ...t, 
@@ -375,7 +340,6 @@ export default function TransactionsPage() {
         } : t)
       )
 
-      // Refresh available books
       const { data: refreshedBooks } = await supabase
         .from("books")
         .select("id, title, author")
@@ -390,52 +354,48 @@ export default function TransactionsPage() {
   }
 
   const sendOverdueReminder = async (transaction: Transaction) => {
-  try {
-    const borrowerEmail = transaction.borrowers?.email
-    const borrowerName = getBorrowerName(transaction)
-    const bookTitle = getBookTitle(transaction)
-    const daysOverdue = getDaysOverdue(transaction)
-    const dueDate = new Date(transaction.due_date).toLocaleDateString()
+    try {
+      const borrowerEmail = transaction.borrowers?.email
+      const borrowerName = getBorrowerName(transaction)
+      const bookTitle = getBookTitle(transaction)
+      const daysOverdue = getDaysOverdue(transaction)
+      const dueDate = new Date(transaction.due_date).toLocaleDateString()
 
-    if (!borrowerEmail) {
-      toast.error("This borrower has no email address on file.")
-      return
+      if (!borrowerEmail) {
+        toast.error("This borrower has no email address on file.")
+        return
+      }
+
+      const loadingToast = toast.loading(`Sending reminder to ${borrowerName}...`)
+
+      const response = await emailjs.send(
+        "service_1lboc1u",
+        "template_w24leai",
+        {
+          to_email: borrowerEmail,
+          to_name: borrowerName,
+          book_title: bookTitle,
+          days_overdue: daysOverdue,
+          due_date: dueDate,
+          message: `This is a friendly reminder that the book "${bookTitle}" was due on ${dueDate} and is now ${daysOverdue} day(s) overdue. Please return it as soon as possible.`,
+        },
+        "VciD--jXYRWjpdqNe"
+      )
+
+      toast.dismiss(loadingToast)
+
+      if (response.status === 200) {
+        toast.success(`Overdue reminder successfully sent to ${borrowerName} 📧`, {
+          description: `Email sent to ${borrowerEmail}`,
+        })
+      } else {
+        toast.error("Failed to send reminder. Please try again.")
+      }
+    } catch (error) {
+      console.error("❌ Email send error:", error)
+      toast.error("Error sending overdue reminder.")
     }
-
-    // Show a loading toast while sending
-    const loadingToast = toast.loading(`Sending reminder to ${borrowerName}...`)
-
-    // ✅ Send the email via EmailJS
-    const response = await emailjs.send(
-      "service_1lboc1u",       // Your EmailJS Service ID
-      "template_w24leai",      // Your EmailJS Template ID
-      {
-        to_email: borrowerEmail,
-        to_name: borrowerName,
-        book_title: bookTitle,
-        days_overdue: daysOverdue,
-        due_date: dueDate,
-        message: `This is a friendly reminder that the book "${bookTitle}" was due on ${dueDate} and is now ${daysOverdue} day(s) overdue. Please return it as soon as possible.`,
-      },
-      "VciD--jXYRWjpdqNe"      // Your EmailJS Public Key
-    )
-
-    // Dismiss the loading toast
-    toast.dismiss(loadingToast)
-
-    if (response.status === 200) {
-      // ✅ Success toast when message is sent
-      toast.success(`Overdue reminder successfully sent to ${borrowerName} 📧`, {
-        description: `Email sent to ${borrowerEmail}`,
-      })
-    } else {
-      toast.error("Failed to send reminder. Please try again.")
-    }
-  } catch (error) {
-    console.error("❌ Email send error:", error)
-    toast.error("Error sending overdue reminder.")
   }
-}
 
   // Add new transaction
   const handleAddTransaction = async (e: React.FormEvent) => {
@@ -445,6 +405,7 @@ export default function TransactionsPage() {
       return
     }
 
+    setSubmitting(true)
     try {
       const { error: loanError, data: loanData } = await supabase
         .from("loans")
@@ -460,13 +421,11 @@ export default function TransactionsPage() {
 
       if (loanError) throw loanError
 
-      // Update book status
       await supabase
         .from("books")
         .update({ status: "borrowed" })
         .eq("id", newLoan.book_id)
 
-      // Refresh transactions to get the new one with proper joins
       const { data: refreshedLoans, error: refreshError } = await supabase
         .from("loans")
         .select(`
@@ -479,14 +438,11 @@ export default function TransactionsPage() {
       if (!refreshError && refreshedLoans) {
         setTransactions(refreshedLoans)
       } else {
-        // Fallback: add the basic loan data
         setTransactions(prev => [loanData, ...prev])
       }
 
-      // Reset form
       setNewLoan({ patron_id: "", book_id: "", due_date: "" })
 
-      // Refresh available books
       const { data: refreshedBooks } = await supabase
         .from("books")
         .select("id, title, author")
@@ -497,6 +453,8 @@ export default function TransactionsPage() {
     } catch (error) {
       console.error("❌ Error adding transaction:", error)
       toast.error("Failed to add transaction")
+    } finally {
+      setSubmitting(false)
     }
   }
 
@@ -575,564 +533,792 @@ export default function TransactionsPage() {
     }
   }
 
+  // Stats calculations
+  const totalTransactions = enhancedTransactions.length
+  const activeTransactions = enhancedTransactions.filter(t => t.status !== "returned").length
+  const returnedTransactions = enhancedTransactions.filter(t => t.status === "returned").length
+
   return (
-    <div className="flex min-h-screen bg-background">
-      <Sidebar />
+    <AuthGuard>
+      <div className="flex min-h-screen bg-gradient-to-br from-slate-50 via-blue-50/30 to-indigo-100/50">
+        <Sidebar />
 
-      <main className="flex-1 lg:ml-64 p-6 space-y-8">
-        <div className="flex justify-between items-center">
-          <h1 className="text-3xl font-bold">Transactions</h1>
-          <Button variant="outline" onClick={debugDataRelationships}>
-            Debug Data Relationships
-          </Button>
-        </div>
+        <main className="flex-1 lg:ml-64 p-6 space-y-6">
+          <div className="max-w-7xl mx-auto space-y-6">
+            {/* Header */}
+            <div>
+              <h1 className="text-3xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">
+                Transactions
+              </h1>
+              <p className="text-muted-foreground">Manage book loans, returns, and overdue items</p>
+            </div>
 
-        {/* Overdue Items Alert Banner */}
-        {overdueTransactions.length > 0 && (
-          <Card className="border-red-200 bg-red-50">
-            <CardContent className="p-4">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <AlertTriangle className="h-5 w-5 text-red-600" />
-                  <div>
-                    <h3 className="font-semibold text-red-900">
-                      {overdueTransactions.length} Overdue Item{overdueTransactions.length !== 1 ? 's' : ''}
-                    </h3>
-                    <p className="text-sm text-red-700">
-                      {overdueTransactions.length} item{overdueTransactions.length !== 1 ? 's' : ''} past due date. Please follow up with borrowers.
-                    </p>
+            {/* Stats Cards */}
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+              <Card className="backdrop-blur-xl border-border/30 bg-gradient-to-b from-background/95 to-background/90 shadow-lg shadow-indigo-500/10">
+                <CardHeader className="flex flex-row items-center justify-between pb-2">
+                  <CardTitle className="text-sm font-medium text-foreground/80">Total</CardTitle>
+                  <div className="p-2 rounded-lg bg-gradient-to-tr from-indigo-500/20 to-purple-500/20">
+                    <History className="h-4 w-4 text-indigo-600" />
                   </div>
-                </div>
-                <Badge variant="destructive" className="text-sm">
-                  Attention Required
-                </Badge>
-              </div>
-            </CardContent>
-          </Card>
-        )}
-
-        <Tabs defaultValue="active" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-2 lg:grid-cols-4">
-            <TabsTrigger value="active">Active Transactions</TabsTrigger>
-            <TabsTrigger value="overdue">
-              Overdue Items
-              {overdueTransactions.length > 0 && (
-                <Badge variant="destructive" className="ml-2 h-5 w-5 rounded-full p-0 text-xs">
-                  {overdueTransactions.length}
-                </Badge>
-              )}
-            </TabsTrigger>
-            <TabsTrigger value="history">Transaction History</TabsTrigger>
-            <TabsTrigger value="new">New Transaction</TabsTrigger>
-          </TabsList>
-
-          {/* New Transaction Tab */}
-          <TabsContent value="new" className="space-y-6">
-            <Card className="max-w-2xl">
-              <CardHeader>
-                <CardTitle>Add New Transaction</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <form onSubmit={handleAddTransaction} className="grid gap-4 md:grid-cols-3">
-                  <div className="flex flex-col gap-2">
-                    <Label>Borrower</Label>
-                    <Select
-                      value={newLoan.patron_id}
-                      onValueChange={val => setNewLoan({ ...newLoan, patron_id: val })}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select borrower" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {borrowers.map(b => (
-                          <SelectItem key={b.id} value={b.id}>
-                            {b.name} {b.email && `(${b.email})`}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <div className="flex flex-col gap-2">
-                    <Label>Book</Label>
-                    <Select
-                      value={newLoan.book_id}
-                      onValueChange={val => setNewLoan({ ...newLoan, book_id: val })}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select book" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {books.map(b => (
-                          <SelectItem key={b.id} value={b.id}>
-                            {b.title} by {b.author}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <div className="flex flex-col gap-2">
-                    <Label>Due Date</Label>
-                    <Input
-                      type="date"
-                      value={newLoan.due_date}
-                      onChange={e => setNewLoan({ ...newLoan, due_date: e.target.value })}
-                      min={new Date().toISOString().split('T')[0]}
-                    />
-                  </div>
-
-                  <div className="md:col-span-3 flex justify-end">
-                    <Button type="submit">Add Transaction</Button>
-                  </div>
-                </form>
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          {/* Active Transactions Tab */}
-          <TabsContent value="active" className="space-y-6">
-            {/* Search Filters */}
-            <Card className="p-4">
-              <div className="grid gap-4 md:grid-cols-3">
-                <div className="flex flex-col gap-2">
-                  <Label>Search Borrower</Label>
-                  <Input
-                    placeholder="Borrower name"
-                    value={search.borrower}
-                    onChange={e => setSearch({ ...search, borrower: e.target.value })}
-                  />
-                </div>
-
-                <div className="flex flex-col gap-2">
-                  <Label>Search Book</Label>
-                  <Input
-                    placeholder="Book title"
-                    value={search.book}
-                    onChange={e => setSearch({ ...search, book: e.target.value })}
-                  />
-                </div>
-
-                <div className="flex flex-col gap-2">
-                  <Label>Search Due Date</Label>
-                  <Input
-                    type="date"
-                    value={search.date}
-                    onChange={e => setSearch({ ...search, date: e.target.value })}
-                  />
-                </div>
-              </div>
-            </Card>
-
-            {/* Active Transactions Table */}
-            {loading ? (
-              <div className="flex justify-center items-center p-8">
-                <p>Loading transactions...</p>
-              </div>
-            ) : filteredTransactions.length === 0 ? (
-              <div className="border rounded-md p-6 text-center text-muted-foreground">
-                No active transactions found.
-              </div>
-            ) : (
-              <div className="overflow-x-auto rounded-md border">
-                <table className="w-full text-sm">
-                  <thead className="bg-muted/50">
-                    <tr className="text-left">
-                      <th className="p-3">Borrower</th>
-                      <th className="p-3">Book</th>
-                      <th className="p-3">Due Date</th>
-                      <th className="p-3">Status</th>
-                      <th className="p-3 text-right">Action</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filteredTransactions.map(t => (
-                      <tr 
-                        key={t.id} 
-                        className={`border-t hover:bg-muted/30 ${
-                          isOverdue(t) ? 'bg-red-50 hover:bg-red-100' : ''
-                        }`}
-                      >
-                        <td className="p-3 font-medium">
-                          <div className="flex items-center gap-2">
-                            {isOverdue(t) && <AlertTriangle className="h-4 w-4 text-red-500" />}
-                            {getBorrowerName(t)}
-                          </div>
-                        </td>
-                        <td className="p-3">{getBookTitle(t)}</td>
-                        <td className="p-3">
-                          <div className="flex items-center gap-1">
-                            <Calendar className="h-3 w-3 text-muted-foreground" />
-                            {new Date(t.due_date).toLocaleDateString()}
-                            {isOverdue(t) && (
-                              <Badge variant={getOverdueSeverity(t)} className="ml-2 text-xs">
-                                {getOverdueStatus(t)}
-                              </Badge>
-                            )}
-                          </div>
-                        </td>
-                        <td className="p-3">
-                          <div className="flex flex-col gap-1">
-                            <Badge variant={getStatusVariant(t.status)}>
-                              {t.status}
-                            </Badge>
-                            {isOverdue(t) && (
-                              <Badge variant="destructive" className="text-xs">
-                                Overdue
-                              </Badge>
-                            )}
-                          </div>
-                        </td>
-                        <td className="p-3 text-right flex gap-2 justify-end">
-                          {t.status === "borrowed" && (
-                            <Button size="sm" variant="outline" onClick={() => markAsActive(t.id)}>
-                              Activate
-                            </Button>
-                          )}
-                          {t.status !== "returned" && (
-                            <Button size="sm" variant="outline" onClick={() => markAsReturned(t.id)}>
-                              Mark as Returned
-                            </Button>
-                          )}
-                          {isOverdue(t) && (
-                            <Button 
-                              size="sm" 
-                              variant="destructive" 
-                              onClick={() => sendOverdueReminder(t)}
-                            >
-                              Send Reminder
-                            </Button>
-                          )}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </TabsContent>
-
-          {/* Overdue Items Tab */}
-          <TabsContent value="overdue" className="space-y-6">
-            {loading ? (
-              <div className="flex justify-center items-center p-8">
-                <p>Loading overdue items...</p>
-              </div>
-            ) : overdueTransactions.length === 0 ? (
-              <Card>
-                <CardContent className="p-8 text-center">
-                  <Clock className="h-12 w-12 text-green-500 mx-auto mb-4" />
-                  <h3 className="text-lg font-semibold mb-2">No Overdue Items</h3>
-                  <p className="text-muted-foreground">
-                    Great! All items have been returned on time or are not yet due.
-                  </p>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold text-foreground">{totalTransactions}</div>
+                  <p className="text-xs text-muted-foreground">All transactions</p>
                 </CardContent>
               </Card>
-            ) : (
-              <>
-                {/* Overdue Summary */}
-                <Card>
+
+              <Card className="backdrop-blur-xl border-border/30 bg-gradient-to-b from-background/95 to-background/90 shadow-lg shadow-indigo-500/10">
+                <CardHeader className="flex flex-row items-center justify-between pb-2">
+                  <CardTitle className="text-sm font-medium text-foreground/80">Active</CardTitle>
+                  <div className="p-2 rounded-lg bg-gradient-to-tr from-blue-500/20 to-cyan-500/20">
+                    <Activity className="h-4 w-4 text-blue-600" />
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold text-foreground">{activeTransactions}</div>
+                  <p className="text-xs text-muted-foreground">Current loans</p>
+                </CardContent>
+              </Card>
+
+              <Card className="backdrop-blur-xl border-border/30 bg-gradient-to-b from-background/95 to-background/90 shadow-lg shadow-indigo-500/10">
+                <CardHeader className="flex flex-row items-center justify-between pb-2">
+                  <CardTitle className="text-sm font-medium text-foreground/80">Returned</CardTitle>
+                  <div className="p-2 rounded-lg bg-gradient-to-tr from-green-500/20 to-emerald-500/20">
+                    <Book className="h-4 w-4 text-green-600" />
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold text-foreground">{returnedTransactions}</div>
+                  <p className="text-xs text-muted-foreground">Completed returns</p>
+                </CardContent>
+              </Card>
+
+              <Card className="backdrop-blur-xl border-border/30 bg-gradient-to-b from-background/95 to-background/90 shadow-lg shadow-indigo-500/10">
+                <CardHeader className="flex flex-row items-center justify-between pb-2">
+                  <CardTitle className="text-sm font-medium text-foreground/80">Overdue</CardTitle>
+                  <div className="p-2 rounded-lg bg-gradient-to-tr from-red-500/20 to-orange-500/20">
+                    <AlertTriangle className="h-4 w-4 text-red-600" />
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold text-destructive">{overdueTransactions.length}</div>
+                  <p className="text-xs text-muted-foreground">Requires attention</p>
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Overdue Items Alert Banner */}
+            {overdueTransactions.length > 0 && (
+              <Card className="backdrop-blur-xl border-red-200/50 bg-gradient-to-b from-red-50/10 to-red-50/5 shadow-lg shadow-red-500/10">
+                <CardContent className="p-4">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <AlertTriangle className="h-5 w-5 text-red-600" />
+                      <div>
+                        <h3 className="font-semibold text-red-900">
+                          {overdueTransactions.length} Overdue Item{overdueTransactions.length !== 1 ? 's' : ''}
+                        </h3>
+                        <p className="text-sm text-red-700">
+                          {overdueTransactions.length} item{overdueTransactions.length !== 1 ? 's' : ''} past due date. Please follow up with borrowers.
+                        </p>
+                      </div>
+                    </div>
+                    <Badge variant="destructive" className="text-sm backdrop-blur-sm">
+                      Attention Required
+                    </Badge>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            <Tabs defaultValue="active" className="space-y-6">
+              <TabsList className="grid w-full grid-cols-2 lg:grid-cols-4 backdrop-blur-sm bg-background/50 border-border/30">
+                <TabsTrigger 
+                  value="active" 
+                  className="flex items-center gap-2 data-[state=active]:bg-gradient-to-r data-[state=active]:from-indigo-500 data-[state=active]:to-purple-500 data-[state=active]:text-white"
+                >
+                  <Activity className="h-4 w-4" />
+                  Active
+                </TabsTrigger>
+                <TabsTrigger 
+                  value="overdue"
+                  className="flex items-center gap-2 data-[state=active]:bg-gradient-to-r data-[state=active]:from-red-500 data-[state=active]:to-orange-500 data-[state=active]:text-white"
+                >
+                  <AlertTriangle className="h-4 w-4" />
+                  Overdue
+                  {overdueTransactions.length > 0 && (
+                    <Badge variant="destructive" className="ml-2 h-5 w-5 rounded-full p-0 text-xs backdrop-blur-sm">
+                      {overdueTransactions.length}
+                    </Badge>
+                  )}
+                </TabsTrigger>
+                <TabsTrigger 
+                  value="history"
+                  className="flex items-center gap-2 data-[state=active]:bg-gradient-to-r data-[state=active]:from-indigo-500 data-[state=active]:to-purple-500 data-[state=active]:text-white"
+                >
+                  <History className="h-4 w-4" />
+                  History
+                </TabsTrigger>
+                <TabsTrigger 
+                  value="new"
+                  className="flex items-center gap-2 data-[state=active]:bg-gradient-to-r data-[state=active]:from-indigo-500 data-[state=active]:to-purple-500 data-[state=active]:text-white"
+                >
+                  <Plus className="h-4 w-4" />
+                  New
+                </TabsTrigger>
+              </TabsList>
+
+              {/* New Transaction Tab */}
+              <TabsContent value="new" className="space-y-6">
+                <Card className="backdrop-blur-xl border-border/30 bg-gradient-to-b from-background/95 to-background/90 shadow-lg shadow-indigo-500/10">
                   <CardHeader>
-                    <CardTitle className="flex items-center gap-2 text-red-600">
-                      <AlertTriangle className="h-5 w-5" />
-                      Overdue Items Summary
+                    <CardTitle className="bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">
+                      Add New Transaction
                     </CardTitle>
+                    <CardDescription>Create a new book loan transaction</CardDescription>
                   </CardHeader>
                   <CardContent>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                      <div className="text-center p-4 border rounded-lg">
-                        <div className="text-2xl font-bold text-red-600">
-                          {overdueTransactions.length}
+                    <form onSubmit={handleAddTransaction} className="space-y-4">
+                      <div className="grid gap-4 md:grid-cols-3">
+                        <div className="space-y-3">
+                          <Label htmlFor="borrower" className="text-sm font-medium text-foreground/80">Borrower</Label>
+                          <Select
+                            value={newLoan.patron_id}
+                            onValueChange={val => setNewLoan({ ...newLoan, patron_id: val })}
+                          >
+                            <SelectTrigger className="bg-background/50 border-border/50 h-11">
+                              <SelectValue placeholder="Select borrower" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {borrowers.map(b => (
+                                <SelectItem key={b.id} value={b.id}>
+                                  {b.name} {b.email && `(${b.email})`}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
                         </div>
-                        <div className="text-sm text-muted-foreground">Total Overdue</div>
+
+                        <div className="space-y-3">
+                          <Label htmlFor="book" className="text-sm font-medium text-foreground/80">Book</Label>
+                          <Select
+                            value={newLoan.book_id}
+                            onValueChange={val => setNewLoan({ ...newLoan, book_id: val })}
+                          >
+                            <SelectTrigger className="bg-background/50 border-border/50 h-11">
+                              <SelectValue placeholder="Select book" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {books.map(b => (
+                                <SelectItem key={b.id} value={b.id}>
+                                  {b.title} by {b.author}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+
+                        <div className="space-y-3">
+                          <Label htmlFor="due_date" className="text-sm font-medium text-foreground/80">Due Date</Label>
+                          <div className="relative">
+                            <Calendar className="absolute left-3 top-3 h-4 w-4 text-indigo-600" />
+                            <Input
+                              type="date"
+                              value={newLoan.due_date}
+                              onChange={e => setNewLoan({ ...newLoan, due_date: e.target.value })}
+                              min={new Date().toISOString().split('T')[0]}
+                              className="pl-11 bg-background/50 border-border/50 focus:border-indigo-300 transition-colors h-11"
+                            />
+                          </div>
+                        </div>
                       </div>
-                      <div className="text-center p-4 border rounded-lg">
-                        <div className="text-2xl font-bold text-orange-600">
-                          {overdueTransactions.filter(t => getDaysOverdue(t) <= 7).length}
-                        </div>
-                        <div className="text-sm text-muted-foreground">1-7 Days Overdue</div>
+
+                      <div className="flex justify-end">
+                        <Button 
+                          type="submit" 
+                          disabled={submitting}
+                          className={cn(
+                            "bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700",
+                            "text-white shadow-lg shadow-indigo-500/25 hover:shadow-indigo-500/40",
+                            "transition-all duration-300 transform hover:scale-[1.02]",
+                            "border-0 h-11"
+                          )}
+                        >
+                          {submitting ? (
+                            <>
+                              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                              Adding...
+                            </>
+                          ) : (
+                            <>
+                              <Plus className="h-4 w-4 mr-2" />
+                              Add Transaction
+                            </>
+                          )}
+                        </Button>
                       </div>
-                      <div className="text-center p-4 border rounded-lg">
-                        <div className="text-2xl font-bold text-red-700">
-                          {overdueTransactions.filter(t => getDaysOverdue(t) > 7).length}
-                        </div>
-                        <div className="text-sm text-muted-foreground">8+ Days Overdue</div>
+                    </form>
+                  </CardContent>
+                </Card>
+              </TabsContent>
+
+              {/* Active Transactions Tab */}
+              <TabsContent value="active" className="space-y-6">
+                {/* Search Filters */}
+                <Card className="backdrop-blur-xl border-border/30 bg-gradient-to-b from-background/95 to-background/90 shadow-lg shadow-indigo-500/10">
+                  <CardHeader>
+                    <CardTitle className="bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">
+                      Search & Filter
+                    </CardTitle>
+                    <CardDescription>Find active transactions</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="grid gap-4 md:grid-cols-3">
+                      <div className="space-y-3">
+                        <Label className="text-sm font-medium text-foreground/80 flex items-center gap-2">
+                          <User className="h-4 w-4 text-indigo-600" />
+                          Search Borrower
+                        </Label>
+                        <Input
+                          placeholder="Borrower name"
+                          value={search.borrower}
+                          onChange={e => setSearch({ ...search, borrower: e.target.value })}
+                          className="bg-background/50 border-border/50 focus:border-indigo-300 transition-colors h-11"
+                        />
+                      </div>
+
+                      <div className="space-y-3">
+                        <Label className="text-sm font-medium text-foreground/80 flex items-center gap-2">
+                          <Book className="h-4 w-4 text-indigo-600" />
+                          Search Book
+                        </Label>
+                        <Input
+                          placeholder="Book title"
+                          value={search.book}
+                          onChange={e => setSearch({ ...search, book: e.target.value })}
+                          className="bg-background/50 border-border/50 focus:border-indigo-300 transition-colors h-11"
+                        />
+                      </div>
+
+                      <div className="space-y-3">
+                        <Label className="text-sm font-medium text-foreground/80 flex items-center gap-2">
+                          <Calendar className="h-4 w-4 text-indigo-600" />
+                          Search Due Date
+                        </Label>
+                        <Input
+                          type="date"
+                          value={search.date}
+                          onChange={e => setSearch({ ...search, date: e.target.value })}
+                          className="bg-background/50 border-border/50 focus:border-indigo-300 transition-colors h-11"
+                        />
                       </div>
                     </div>
                   </CardContent>
                 </Card>
 
-                {/* Overdue Items Table */}
-                <div className="overflow-x-auto rounded-md border border-red-200">
-                  <table className="w-full text-sm">
-                    <thead className="bg-red-50">
-                      <tr className="text-left">
-                        <th className="p-3">Borrower</th>
-                        <th className="p-3">Book</th>
-                        <th className="p-3">Due Date</th>
-                        <th className="p-3">Days Overdue</th>
-                        <th className="p-3">Status</th>
-                        <th className="p-3 text-right">Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {overdueTransactions
-                        .sort((a, b) => getDaysOverdue(b) - getDaysOverdue(a)) // Sort by most overdue first
-                        .map(t => (
-                        <tr key={t.id} className="border-t border-red-100 bg-red-50 hover:bg-red-100">
-                          <td className="p-3 font-medium">
-                            <div className="flex items-center gap-2">
-                              <AlertTriangle className="h-4 w-4 text-red-500" />
-                              {getBorrowerName(t)}
-                            </div>
-                          </td>
-                          <td className="p-3">{getBookTitle(t)}</td>
-                          <td className="p-3">
-                            <div className="flex items-center gap-1 text-red-700">
-                              <Calendar className="h-3 w-3" />
-                              {new Date(t.due_date).toLocaleDateString()}
-                            </div>
-                          </td>
-                          <td className="p-3">
-                            <Badge variant={getOverdueSeverity(t)}>
-                              {getDaysOverdue(t)} day{getDaysOverdue(t) !== 1 ? 's' : ''} overdue
-                            </Badge>
-                          </td>
-                          <td className="p-3">
-                            <Badge variant={getStatusVariant(t.status)}>
-                              {t.status}
-                            </Badge>
-                          </td>
-                          <td className="p-3 text-right flex gap-2 justify-end">
-                            <Button 
-                              size="sm" 
-                              variant="outline" 
-                              onClick={() => markAsReturned(t.id)}
-                            >
-                              Mark Returned
-                            </Button>
-                            <Button 
-                              size="sm" 
-                              variant="destructive" 
-                              onClick={() => sendOverdueReminder(t)}
-                            >
-                              Send Reminder
-                            </Button>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </>
-            )}
-          </TabsContent>
-
-          {/* Transaction History Tab */}
-          <TabsContent value="history" className="space-y-6">
-            {/* History Search Filters */}
-            <Card className="p-4">
-              <div className="grid gap-4 md:grid-cols-5">
-                <div className="flex flex-col gap-2">
-                  <Label>Borrower</Label>
-                  <Input
-                    placeholder="Borrower name"
-                    value={historySearch.borrower}
-                    onChange={e => setHistorySearch({ ...historySearch, borrower: e.target.value })}
-                  />
-                </div>
-
-                <div className="flex flex-col gap-2">
-                  <Label>Book</Label>
-                  <Input
-                    placeholder="Book title"
-                    value={historySearch.book}
-                    onChange={e => setHistorySearch({ ...historySearch, book: e.target.value })}
-                  />
-                </div>
-
-                <div className="flex flex-col gap-2">
-                  <Label>From Date</Label>
-                  <Input
-                    type="date"
-                    value={historySearch.date_from}
-                    onChange={e => setHistorySearch({ ...historySearch, date_from: e.target.value })}
-                  />
-                </div>
-
-                <div className="flex flex-col gap-2">
-                  <Label>To Date</Label>
-                  <Input
-                    type="date"
-                    value={historySearch.date_to}
-                    onChange={e => setHistorySearch({ ...historySearch, date_to: e.target.value })}
-                  />
-                </div>
-
-                <div className="flex flex-col gap-2">
-                  <Label>Status</Label>
-                  <Select
-                    value={historySearch.status}
-                    onValueChange={val => setHistorySearch({ ...historySearch, status: val })}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="All statuses" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">All Statuses</SelectItem>
-                      <SelectItem value="borrowed">Borrowed</SelectItem>
-                      <SelectItem value="active">Active</SelectItem>
-                      <SelectItem value="returned">Returned</SelectItem>
-                      <SelectItem value="overdue">Overdue</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-            </Card>
-
-            {/* Transaction History Table */}
-            {loading ? (
-              <div className="flex justify-center items-center p-8">
-                <p>Loading history...</p>
-              </div>
-            ) : filteredHistory.length === 0 ? (
-              <div className="border rounded-md p-6 text-center text-muted-foreground">
-                No transaction history found.
-              </div>
-            ) : (
-              <div className="overflow-x-auto rounded-md border">
-                <table className="w-full text-sm">
-                  <thead className="bg-muted/50">
-                    <tr className="text-left">
-                      <th 
-                        className="p-3 cursor-pointer hover:bg-muted/70"
-                        onClick={() => handleSort("created_at")}
-                      >
-                        <div className="flex items-center gap-1">
-                          Date
-                          <ArrowUpDown className="h-3 w-3" />
-                        </div>
-                      </th>
-                      <th 
-                        className="p-3 cursor-pointer hover:bg-muted/70"
-                        onClick={() => handleSort("name")}
-                      >
-                        <div className="flex items-center gap-1">
-                          Borrower
-                          <ArrowUpDown className="h-3 w-3" />
-                        </div>
-                      </th>
-                      <th 
-                        className="p-3 cursor-pointer hover:bg-muted/70"
-                        onClick={() => handleSort("title")}
-                      >
-                        <div className="flex items-center gap-1">
-                          Book
-                          <ArrowUpDown className="h-3 w-3" />
-                        </div>
-                      </th>
-                      <th className="p-3">Due Date</th>
-                      <th className="p-3">Returned Date</th>
-                      <th className="p-3">Status</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filteredHistory.map(t => (
-                      <tr 
-                        key={t.id} 
-                        className={`border-t hover:bg-muted/30 ${
-                          isOverdue(t) ? 'bg-red-50 hover:bg-red-100' : ''
-                        }`}
-                      >
-                        <td className="p-3">
-                          <div className="flex items-center gap-1 text-muted-foreground">
-                            <Calendar className="h-3 w-3" />
-                            {new Date(t.created_at).toLocaleDateString()}
-                          </div>
-                        </td>
-                        <td className="p-3 font-medium">
-                          <div className="flex items-center gap-1">
-                            <User className="h-3 w-3 text-muted-foreground" />
-                            {getBorrowerName(t)}
-                          </div>
-                        </td>
-                        <td className="p-3">
-                          <div className="flex items-center gap-1">
-                            <Book className="h-3 w-3 text-muted-foreground" />
-                            {getBookTitle(t)}
-                          </div>
-                        </td>
-                        <td className="p-3">
-                          {new Date(t.due_date).toLocaleDateString()}
-                        </td>
-                        <td className="p-3">
-                          {t.returned_date ? (
-                            <div className="flex items-center gap-1 text-green-600">
-                              <Calendar className="h-3 w-3" />
-                              {new Date(t.returned_date).toLocaleDateString()}
-                            </div>
-                          ) : (
-                            <span className="text-muted-foreground">Not returned</span>
-                          )}
-                        </td>
-                        <td className="p-3">
-                          <div className="flex flex-col gap-1">
-                            <Badge variant={getStatusVariant(t.status)}>
-                              {t.status}
-                            </Badge>
-                            {isOverdue(t) && (
-                              <Badge variant="destructive" className="text-xs">
-                                Overdue ({getDaysOverdue(t)} days)
-                              </Badge>
-                            )}
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-
-            {/* History Summary */}
-            {!loading && filteredHistory.length > 0 && (
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-lg">History Summary</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-                    <div className="text-center">
-                      <div className="text-2xl font-bold text-blue-600">
-                        {filteredHistory.length}
-                      </div>
-                      <div className="text-muted-foreground">Total Records</div>
-                    </div>
-                    <div className="text-center">
-                      <div className="text-2xl font-bold text-green-600">
-                        {filteredHistory.filter(t => t.status === "returned").length}
-                      </div>
-                      <div className="text-muted-foreground">Returned</div>
-                    </div>
-                    <div className="text-center">
-                      <div className="text-2xl font-bold text-orange-600">
-                        {filteredHistory.filter(t => t.status === "active").length}
-                      </div>
-                      <div className="text-muted-foreground">Active</div>
-                    </div>
-                    <div className="text-center">
-                      <div className="text-2xl font-bold text-red-600">
-                        {filteredHistory.filter(t => isOverdue(t)).length}
-                      </div>
-                      <div className="text-muted-foreground">Overdue</div>
-                    </div>
+                {/* Active Transactions Table */}
+                {loading ? (
+                  <div className="text-center py-8">
+                    <Loader2 className="h-8 w-8 animate-spin text-indigo-600 mx-auto mb-4" />
+                    <p className="text-muted-foreground">Loading transactions...</p>
                   </div>
-                </CardContent>
-              </Card>
-            )}
-          </TabsContent>
-        </Tabs>
-      </main>
-    </div>
+                ) : filteredTransactions.length === 0 ? (
+                  <Card className="backdrop-blur-xl border-border/30 text-center py-8">
+                    <Activity className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                    <h3 className="text-lg font-medium text-foreground mb-2">No active transactions found</h3>
+                    <p className="text-muted-foreground">Try adjusting your search criteria or create a new transaction.</p>
+                  </Card>
+                ) : (
+                  <Card className="backdrop-blur-xl border-border/30 bg-gradient-to-b from-background/95 to-background/90 shadow-lg shadow-indigo-500/10 overflow-hidden">
+                    <CardHeader>
+                      <CardTitle className="bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">
+                        Active Transactions ({filteredTransactions.length})
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="p-0">
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-sm">
+                          <thead className="bg-muted/30 backdrop-blur-sm border-b border-border/30">
+                            <tr className="text-left">
+                              <th className="p-4 font-medium text-foreground/80">Borrower</th>
+                              <th className="p-4 font-medium text-foreground/80">Book</th>
+                              <th className="p-4 font-medium text-foreground/80">Due Date</th>
+                              <th className="p-4 font-medium text-foreground/80">Status</th>
+                              <th className="p-4 font-medium text-foreground/80 text-right">Actions</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {filteredTransactions.map(t => (
+                              <tr 
+                                key={t.id} 
+                                className={cn(
+                                  "border-b border-border/30 hover:bg-muted/20 transition-colors",
+                                  isOverdue(t) && "bg-red-50/50 hover:bg-red-100/50"
+                                )}
+                              >
+                                <td className="p-4 font-medium">
+                                  <div className="flex items-center gap-2">
+                                    {isOverdue(t) && <AlertTriangle className="h-4 w-4 text-red-500" />}
+                                    <User className="h-4 w-4 text-indigo-600" />
+                                    {getBorrowerName(t)}
+                                  </div>
+                                </td>
+                                <td className="p-4">
+                                  <div className="flex items-center gap-2">
+                                    <Book className="h-4 w-4 text-indigo-600" />
+                                    {getBookTitle(t)}
+                                  </div>
+                                </td>
+                                <td className="p-4">
+                                  <div className="flex items-center gap-2">
+                                    <Calendar className="h-4 w-4 text-indigo-600" />
+                                    {new Date(t.due_date).toLocaleDateString()}
+                                    {isOverdue(t) && (
+                                      <Badge variant={getOverdueSeverity(t)} className="ml-2 text-xs backdrop-blur-sm">
+                                        {getOverdueStatus(t)}
+                                      </Badge>
+                                    )}
+                                  </div>
+                                </td>
+                                <td className="p-4">
+                                  <div className="flex flex-col gap-1">
+                                    <Badge 
+                                      variant={getStatusVariant(t.status)} 
+                                      className="backdrop-blur-sm"
+                                    >
+                                      {t.status}
+                                    </Badge>
+                                    {isOverdue(t) && (
+                                      <Badge variant="destructive" className="text-xs backdrop-blur-sm">
+                                        Overdue
+                                      </Badge>
+                                    )}
+                                  </div>
+                                </td>
+                                <td className="p-4 text-right flex gap-2 justify-end">
+                                  {t.status === "borrowed" && (
+                                    <Button 
+                                      size="sm" 
+                                      variant="outline" 
+                                      onClick={() => markAsActive(t.id)}
+                                      className="backdrop-blur-sm border-border/50 hover:bg-blue-50 hover:border-blue-200"
+                                    >
+                                      Activate
+                                    </Button>
+                                  )}
+                                  {t.status !== "returned" && (
+                                    <Button 
+                                      size="sm" 
+                                      variant="outline" 
+                                      onClick={() => markAsReturned(t.id)}
+                                      className="backdrop-blur-sm border-border/50 hover:bg-green-50 hover:border-green-200"
+                                    >
+                                      Mark Returned
+                                    </Button>
+                                  )}
+                                  {isOverdue(t) && (
+                                    <Button 
+                                      size="sm" 
+                                      variant="destructive" 
+                                      onClick={() => sendOverdueReminder(t)}
+                                      className="backdrop-blur-sm"
+                                    >
+                                      <Mail className="h-4 w-4 mr-2" />
+                                      Reminder
+                                    </Button>
+                                  )}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+              </TabsContent>
+
+              {/* Overdue Items Tab */}
+              <TabsContent value="overdue" className="space-y-6">
+                {loading ? (
+                  <div className="text-center py-8">
+                    <Loader2 className="h-8 w-8 animate-spin text-indigo-600 mx-auto mb-4" />
+                    <p className="text-muted-foreground">Loading overdue items...</p>
+                  </div>
+                ) : overdueTransactions.length === 0 ? (
+                  <Card className="backdrop-blur-xl border-border/30 text-center py-8">
+                    <Clock className="h-12 w-12 text-green-500 mx-auto mb-4" />
+                    <h3 className="text-lg font-medium text-foreground mb-2">No Overdue Items</h3>
+                    <p className="text-muted-foreground">
+                      Great! All items have been returned on time or are not yet due.
+                    </p>
+                  </Card>
+                ) : (
+                  <>
+                    {/* Overdue Summary */}
+                    <Card className="backdrop-blur-xl border-red-200/50 bg-gradient-to-b from-red-50/10 to-red-50/5 shadow-lg shadow-red-500/10">
+                      <CardHeader>
+                        <CardTitle className="flex items-center gap-2 text-red-600">
+                          <AlertTriangle className="h-5 w-5" />
+                          Overdue Items Summary
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                          <div className="text-center p-4 bg-red-50/50 rounded-lg backdrop-blur-sm border border-red-200/50">
+                            <div className="text-2xl font-bold text-red-600">
+                              {overdueTransactions.length}
+                            </div>
+                            <div className="text-sm text-muted-foreground">Total Overdue</div>
+                          </div>
+                          <div className="text-center p-4 bg-orange-50/50 rounded-lg backdrop-blur-sm border border-orange-200/50">
+                            <div className="text-2xl font-bold text-orange-600">
+                              {overdueTransactions.filter(t => getDaysOverdue(t) <= 7).length}
+                            </div>
+                            <div className="text-sm text-muted-foreground">1-7 Days Overdue</div>
+                          </div>
+                          <div className="text-center p-4 bg-red-100/50 rounded-lg backdrop-blur-sm border border-red-300/50">
+                            <div className="text-2xl font-bold text-red-700">
+                              {overdueTransactions.filter(t => getDaysOverdue(t) > 7).length}
+                            </div>
+                            <div className="text-sm text-muted-foreground">8+ Days Overdue</div>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+
+                    {/* Overdue Items Table */}
+                    <Card className="backdrop-blur-xl border-red-200/50 bg-gradient-to-b from-red-50/10 to-red-50/5 shadow-lg shadow-red-500/10 overflow-hidden">
+                      <CardHeader>
+                        <CardTitle className="text-red-600">Overdue Items</CardTitle>
+                      </CardHeader>
+                      <CardContent className="p-0">
+                        <div className="overflow-x-auto">
+                          <table className="w-full text-sm">
+                            <thead className="bg-red-50/50 backdrop-blur-sm border-b border-red-200/50">
+                              <tr className="text-left">
+                                <th className="p-4 font-medium text-foreground/80">Borrower</th>
+                                <th className="p-4 font-medium text-foreground/80">Book</th>
+                                <th className="p-4 font-medium text-foreground/80">Due Date</th>
+                                <th className="p-4 font-medium text-foreground/80">Days Overdue</th>
+                                <th className="p-4 font-medium text-foreground/80">Status</th>
+                                <th className="p-4 font-medium text-foreground/80 text-right">Actions</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {overdueTransactions
+                                .sort((a, b) => getDaysOverdue(b) - getDaysOverdue(a))
+                                .map(t => (
+                                <tr key={t.id} className="border-b border-red-100/50 bg-red-50/30 hover:bg-red-100/30 transition-colors">
+                                  <td className="p-4 font-medium">
+                                    <div className="flex items-center gap-2">
+                                      <AlertTriangle className="h-4 w-4 text-red-500" />
+                                      <User className="h-4 w-4 text-indigo-600" />
+                                      {getBorrowerName(t)}
+                                    </div>
+                                  </td>
+                                  <td className="p-4">
+                                    <div className="flex items-center gap-2">
+                                      <Book className="h-4 w-4 text-indigo-600" />
+                                      {getBookTitle(t)}
+                                    </div>
+                                  </td>
+                                  <td className="p-4">
+                                    <div className="flex items-center gap-2 text-red-700">
+                                      <Calendar className="h-4 w-4" />
+                                      {new Date(t.due_date).toLocaleDateString()}
+                                    </div>
+                                  </td>
+                                  <td className="p-4">
+                                    <Badge variant={getOverdueSeverity(t)} className="backdrop-blur-sm">
+                                      {getDaysOverdue(t)} day{getDaysOverdue(t) !== 1 ? 's' : ''} overdue
+                                    </Badge>
+                                  </td>
+                                  <td className="p-4">
+                                    <Badge variant={getStatusVariant(t.status)} className="backdrop-blur-sm">
+                                      {t.status}
+                                    </Badge>
+                                  </td>
+                                  <td className="p-4 text-right flex gap-2 justify-end">
+                                    <Button 
+                                      size="sm" 
+                                      variant="outline" 
+                                      onClick={() => markAsReturned(t.id)}
+                                      className="backdrop-blur-sm border-border/50 hover:bg-green-50 hover:border-green-200"
+                                    >
+                                      Mark Returned
+                                    </Button>
+                                    <Button 
+                                      size="sm" 
+                                      variant="destructive" 
+                                      onClick={() => sendOverdueReminder(t)}
+                                      className="backdrop-blur-sm"
+                                    >
+                                      <Mail className="h-4 w-4 mr-2" />
+                                      Send Reminder
+                                    </Button>
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </>
+                )}
+              </TabsContent>
+
+              {/* Transaction History Tab */}
+              <TabsContent value="history" className="space-y-6">
+                {/* History Search Filters */}
+                <Card className="backdrop-blur-xl border-border/30 bg-gradient-to-b from-background/95 to-background/90 shadow-lg shadow-indigo-500/10">
+                  <CardHeader>
+                    <CardTitle className="bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">
+                      History Search & Filter
+                    </CardTitle>
+                    <CardDescription>Search through transaction history</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="grid gap-4 md:grid-cols-5">
+                      <div className="space-y-3">
+                        <Label className="text-sm font-medium text-foreground/80 flex items-center gap-2">
+                          <User className="h-4 w-4 text-indigo-600" />
+                          Borrower
+                        </Label>
+                        <Input
+                          placeholder="Borrower name"
+                          value={historySearch.borrower}
+                          onChange={e => setHistorySearch({ ...historySearch, borrower: e.target.value })}
+                          className="bg-background/50 border-border/50 focus:border-indigo-300 transition-colors h-11"
+                        />
+                      </div>
+
+                      <div className="space-y-3">
+                        <Label className="text-sm font-medium text-foreground/80 flex items-center gap-2">
+                          <Book className="h-4 w-4 text-indigo-600" />
+                          Book
+                        </Label>
+                        <Input
+                          placeholder="Book title"
+                          value={historySearch.book}
+                          onChange={e => setHistorySearch({ ...historySearch, book: e.target.value })}
+                          className="bg-background/50 border-border/50 focus:border-indigo-300 transition-colors h-11"
+                        />
+                      </div>
+
+                      <div className="space-y-3">
+                        <Label className="text-sm font-medium text-foreground/80 flex items-center gap-2">
+                          <Calendar className="h-4 w-4 text-indigo-600" />
+                          From Date
+                        </Label>
+                        <Input
+                          type="date"
+                          value={historySearch.date_from}
+                          onChange={e => setHistorySearch({ ...historySearch, date_from: e.target.value })}
+                          className="bg-background/50 border-border/50 focus:border-indigo-300 transition-colors h-11"
+                        />
+                      </div>
+
+                      <div className="space-y-3">
+                        <Label className="text-sm font-medium text-foreground/80 flex items-center gap-2">
+                          <Calendar className="h-4 w-4 text-indigo-600" />
+                          To Date
+                        </Label>
+                        <Input
+                          type="date"
+                          value={historySearch.date_to}
+                          onChange={e => setHistorySearch({ ...historySearch, date_to: e.target.value })}
+                          className="bg-background/50 border-border/50 focus:border-indigo-300 transition-colors h-11"
+                        />
+                      </div>
+
+                      <div className="space-y-3">
+                        <Label className="text-sm font-medium text-foreground/80 flex items-center gap-2">
+                          <Filter className="h-4 w-4 text-indigo-600" />
+                          Status
+                        </Label>
+                        <Select
+                          value={historySearch.status}
+                          onValueChange={val => setHistorySearch({ ...historySearch, status: val })}
+                        >
+                          <SelectTrigger className="bg-background/50 border-border/50 h-11">
+                            <SelectValue placeholder="All statuses" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="all">All Statuses</SelectItem>
+                            <SelectItem value="borrowed">Borrowed</SelectItem>
+                            <SelectItem value="active">Active</SelectItem>
+                            <SelectItem value="returned">Returned</SelectItem>
+                            <SelectItem value="overdue">Overdue</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {/* Transaction History Table */}
+                {loading ? (
+                  <div className="text-center py-8">
+                    <Loader2 className="h-8 w-8 animate-spin text-indigo-600 mx-auto mb-4" />
+                    <p className="text-muted-foreground">Loading history...</p>
+                  </div>
+                ) : filteredHistory.length === 0 ? (
+                  <Card className="backdrop-blur-xl border-border/30 text-center py-8">
+                    <History className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                    <h3 className="text-lg font-medium text-foreground mb-2">No transaction history found</h3>
+                    <p className="text-muted-foreground">Try adjusting your search criteria.</p>
+                  </Card>
+                ) : (
+                  <Card className="backdrop-blur-xl border-border/30 bg-gradient-to-b from-background/95 to-background/90 shadow-lg shadow-indigo-500/10 overflow-hidden">
+                    <CardHeader>
+                      <CardTitle className="bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">
+                        Transaction History ({filteredHistory.length})
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="p-0">
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-sm">
+                          <thead className="bg-muted/30 backdrop-blur-sm border-b border-border/30">
+                            <tr className="text-left">
+                              <th 
+                                className="p-4 font-medium text-foreground/80 cursor-pointer hover:bg-muted/50 transition-colors"
+                                onClick={() => handleSort("created_at")}
+                              >
+                                <div className="flex items-center gap-1">
+                                  Date
+                                  <ArrowUpDown className="h-3 w-3" />
+                                </div>
+                              </th>
+                              <th 
+                                className="p-4 font-medium text-foreground/80 cursor-pointer hover:bg-muted/50 transition-colors"
+                                onClick={() => handleSort("name")}
+                              >
+                                <div className="flex items-center gap-1">
+                                  Borrower
+                                  <ArrowUpDown className="h-3 w-3" />
+                                </div>
+                              </th>
+                              <th 
+                                className="p-4 font-medium text-foreground/80 cursor-pointer hover:bg-muted/50 transition-colors"
+                                onClick={() => handleSort("title")}
+                              >
+                                <div className="flex items-center gap-1">
+                                  Book
+                                  <ArrowUpDown className="h-3 w-3" />
+                                </div>
+                              </th>
+                              <th className="p-4 font-medium text-foreground/80">Due Date</th>
+                              <th className="p-4 font-medium text-foreground/80">Returned Date</th>
+                              <th className="p-4 font-medium text-foreground/80">Status</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {filteredHistory.map(t => (
+                              <tr 
+                                key={t.id} 
+                                className={cn(
+                                  "border-b border-border/30 hover:bg-muted/20 transition-colors",
+                                  isOverdue(t) && "bg-red-50/30 hover:bg-red-100/30"
+                                )}
+                              >
+                                <td className="p-4">
+                                  <div className="flex items-center gap-2 text-muted-foreground">
+                                    <Calendar className="h-4 w-4" />
+                                    {new Date(t.created_at).toLocaleDateString()}
+                                  </div>
+                                </td>
+                                <td className="p-4 font-medium">
+                                  <div className="flex items-center gap-2">
+                                    <User className="h-4 w-4 text-indigo-600" />
+                                    {getBorrowerName(t)}
+                                  </div>
+                                </td>
+                                <td className="p-4">
+                                  <div className="flex items-center gap-2">
+                                    <Book className="h-4 w-4 text-indigo-600" />
+                                    {getBookTitle(t)}
+                                  </div>
+                                </td>
+                                <td className="p-4">
+                                  {new Date(t.due_date).toLocaleDateString()}
+                                </td>
+                                <td className="p-4">
+                                  {t.returned_date ? (
+                                    <div className="flex items-center gap-2 text-green-600">
+                                      <Calendar className="h-4 w-4" />
+                                      {new Date(t.returned_date).toLocaleDateString()}
+                                    </div>
+                                  ) : (
+                                    <span className="text-muted-foreground">Not returned</span>
+                                  )}
+                                </td>
+                                <td className="p-4">
+                                  <div className="flex flex-col gap-1">
+                                    <Badge variant={getStatusVariant(t.status)} className="backdrop-blur-sm">
+                                      {t.status}
+                                    </Badge>
+                                    {isOverdue(t) && (
+                                      <Badge variant="destructive" className="text-xs backdrop-blur-sm">
+                                        Overdue ({getDaysOverdue(t)} days)
+                                      </Badge>
+                                    )}
+                                  </div>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+
+                {/* History Summary */}
+                {!loading && filteredHistory.length > 0 && (
+                  <Card className="backdrop-blur-xl border-border/30 bg-gradient-to-b from-background/95 to-background/90 shadow-lg shadow-indigo-500/10">
+                    <CardHeader>
+                      <CardTitle className="text-lg bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">
+                        History Summary
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                        <div className="text-center p-3 bg-blue-50/50 rounded-lg backdrop-blur-sm">
+                          <div className="text-2xl font-bold text-blue-600">
+                            {filteredHistory.length}
+                          </div>
+                          <div className="text-muted-foreground">Total Records</div>
+                        </div>
+                        <div className="text-center p-3 bg-green-50/50 rounded-lg backdrop-blur-sm">
+                          <div className="text-2xl font-bold text-green-600">
+                            {filteredHistory.filter(t => t.status === "returned").length}
+                          </div>
+                          <div className="text-muted-foreground">Returned</div>
+                        </div>
+                        <div className="text-center p-3 bg-orange-50/50 rounded-lg backdrop-blur-sm">
+                          <div className="text-2xl font-bold text-orange-600">
+                            {filteredHistory.filter(t => t.status === "active").length}
+                          </div>
+                          <div className="text-muted-foreground">Active</div>
+                        </div>
+                        <div className="text-center p-3 bg-red-50/50 rounded-lg backdrop-blur-sm">
+                          <div className="text-2xl font-bold text-red-600">
+                            {filteredHistory.filter(t => isOverdue(t)).length}
+                          </div>
+                          <div className="text-muted-foreground">Overdue</div>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+              </TabsContent>
+            </Tabs>
+          </div>
+        </main>
+      </div>
+    </AuthGuard>
   )
 }
