@@ -72,12 +72,19 @@ export default function TransactionsPage() {
         ] = await Promise.all([
           // Try to fetch loans with joins first
           supabase
-            .from("loans")
-            .select(`
-              *,
-              borrowers!loans_patron_id_fkey ( id, name, email ),
-              books!loans_book_id_fkey ( id, title, author, isbn )
-            `)
+          .from("loans")
+          .select(`
+            id,
+            status,
+            due_date,
+            returned_date,
+            created_at,
+            loan_date,
+            patron_id,
+            book_id,
+            borrowers:borrowers!loans_patron_id_fkey ( id, name, email ),
+            books:books!loans_book_id_fkey ( id, title, author, isbn )
+          `)
             .order("created_at", { ascending: false }),
           
           // Fetch all borrowers
