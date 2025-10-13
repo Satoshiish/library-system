@@ -23,11 +23,10 @@ const navigation = [
   { name: "Books", href: "/books", icon: BookOpen },
   { name: "Add Book", href: "/books/add", icon: Plus },
   { name: "Borrowers", href: "/borrowers", icon: Users },
-  { name: "Patrons", href: "/patron", icon: UserPlus }, // ✅ Updated icon
+  { name: "Patrons", href: "/patron", icon: UserPlus },
   { name: "Transactions", href: "/transactions", icon: BookCopy },
   { name: "Search", href: "/search", icon: Search },
 ]
-
 
 export function Sidebar() {
   const pathname = usePathname()
@@ -48,41 +47,34 @@ export function Sidebar() {
         <Button
           variant="outline"
           size="icon"
+          className="backdrop-blur-md border-muted shadow-sm"
           onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
         >
-          {isMobileMenuOpen ? (
-            <X className="h-4 w-4" />
-          ) : (
-            <Menu className="h-4 w-4" />
-          )}
+          {isMobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
         </Button>
       </div>
 
       {/* Sidebar */}
       <div
         className={cn(
-          "fixed inset-y-0 left-0 z-40 w-64 bg-sidebar border-r border-sidebar-border transform transition-transform duration-200 ease-in-out lg:translate-x-0",
-          isMobileMenuOpen
-            ? "translate-x-0"
-            : "-translate-x-full lg:translate-x-0"
+          "fixed inset-y-0 left-0 z-40 w-64 backdrop-blur-xl border-r border-border/30 bg-gradient-to-b from-sidebar/70 to-sidebar/40 text-sidebar-foreground shadow-xl transform transition-all duration-300 ease-in-out",
+          isMobileMenuOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
         )}
       >
         <div className="flex flex-col h-full">
           {/* Header */}
-          <div className="flex items-center gap-2 p-6 border-b border-sidebar-border">
-            <div className="bg-sidebar-accent rounded-lg p-2">
-              <BookOpen className="h-6 w-6 text-sidebar-accent-foreground" />
+          <div className="flex items-center gap-3 px-6 py-5 border-b border-border/30 backdrop-blur-lg">
+            <div className="bg-gradient-to-tr from-indigo-500 to-purple-500 p-2 rounded-xl shadow-md">
+              <BookOpen className="h-6 w-6 text-white" />
             </div>
             <div>
-              <h1 className="font-bold text-lg text-sidebar-foreground">
-                Library
-              </h1>
+              <h1 className="font-semibold text-lg">Library</h1>
               <p className="text-sm text-muted-foreground">Management System</p>
             </div>
           </div>
 
           {/* Navigation */}
-          <nav className="flex-1 p-4 space-y-2">
+          <nav className="flex-1 p-4 space-y-1 mt-2">
             {navigation.map((item) => {
               const isActive =
                 pathname === item.href || pathname.startsWith(`${item.href}/`)
@@ -90,26 +82,32 @@ export function Sidebar() {
                 <Link
                   key={item.name}
                   href={item.href}
-                  className={cn(
-                    "flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors",
-                    isActive
-                      ? "bg-sidebar-accent text-sidebar-accent-foreground"
-                      : "text-sidebar-foreground hover:bg-sidebar-accent/50 hover:text-sidebar-accent-foreground"
-                  )}
                   onClick={closeMenu}
+                  className={cn(
+                    "group flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 relative",
+                    isActive
+                      ? "bg-gradient-to-r from-indigo-500/90 to-purple-500/80 text-white shadow-md"
+                      : "hover:bg-muted/60 hover:text-foreground text-muted-foreground"
+                  )}
                 >
-                  <item.icon className="h-4 w-4" />
+                  <div
+                    className={cn(
+                      "absolute left-0 top-0 h-full w-1 rounded-r-lg transition-all",
+                      isActive ? "bg-indigo-400" : "group-hover:bg-indigo-300/60"
+                    )}
+                  />
+                  <item.icon className="h-4 w-4 shrink-0" />
                   {item.name}
                 </Link>
               )
             })}
           </nav>
 
-          {/* Logout */}
-          <div className="p-4 border-t border-sidebar-border">
+          {/* Footer */}
+          <div className="mt-auto border-t border-border/30 px-4 py-3">
             <Button
               variant="ghost"
-              className="w-full justify-start text-sidebar-foreground hover:bg-sidebar-accent/50"
+              className="w-full justify-start text-muted-foreground hover:text-foreground hover:bg-muted/60 transition"
               onClick={handleLogout}
             >
               <LogOut className="mr-3 h-4 w-4" />
@@ -122,7 +120,7 @@ export function Sidebar() {
       {/* Mobile Overlay */}
       {isMobileMenuOpen && (
         <div
-          className="fixed inset-0 bg-black/50 z-30 lg:hidden"
+          className="fixed inset-0 bg-black/40 backdrop-blur-sm z-30 lg:hidden"
           onClick={closeMenu}
         />
       )}
