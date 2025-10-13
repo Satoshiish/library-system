@@ -394,12 +394,11 @@ export default function DashboardPage() {
               </Card>
             </div>
 
-
             {/* Additional Stats Cards */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <Card className="backdrop-blur-xl border-border/30 bg-gradient-to-b from-background/95 to-background/90 shadow-lg shadow-indigo-500/10">
                 <CardHeader className="flex flex-row items-center justify-between pb-2">
-                  <CardTitle className="text-sm font-medium text-foreground/80">Total Borrowers</CardTitle>
+                  <CardTitle className="text-sm font-medium text-foreground/80">Total Patrons</CardTitle>
                   <div className="p-2 rounded-lg bg-gradient-to-tr from-purple-500/20 to-pink-500/20">
                     <Users className="h-4 w-4 text-purple-600" />
                   </div>
@@ -432,35 +431,83 @@ export default function DashboardPage() {
                   <CardTitle className="bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">
                     Recent Activity
                   </CardTitle>
-                  <CardDescription>Latest library transactions</CardDescription>
+                  <CardDescription>Latest library transactions and book movements</CardDescription>
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-4">
-                    {recentActivity.map(activity => (
-                      <div key={activity.id} className="flex items-center justify-between p-3 rounded-lg hover:bg-muted/30 transition-colors">
-                        <div className="flex items-center gap-3">
-                          <div
-                            className={cn(
-                              "w-2 h-2 rounded-full transition-all",
-                              activity.status === "active" || activity.status === "borrowed"
-                                ? "bg-gradient-to-r from-blue-500 to-cyan-500" 
-                                : "bg-gradient-to-r from-green-500 to-emerald-500"
-                            )}
-                          />
-                          <div>
-                            <p className="text-sm font-medium">{activity.title}</p>
-                            <p className="text-xs text-muted-foreground">
-                              {activity.status} by {activity.borrowerName}
-                            </p>
+                    {recentActivity.map(activity => {
+                      // Determine action type and styling based on status
+                      const getActionInfo = () => {
+                        switch (activity.status) {
+                          case "returned":
+                            return {
+                              action: "Returned",
+                              color: "bg-gradient-to-r from-green-500 to-emerald-500",
+                              textColor: "text-green-600"
+                            }
+                          case "borrowed":
+                          case "active":
+                            return {
+                              action: "Checked Out",
+                              color: "bg-gradient-to-r from-blue-500 to-cyan-500",
+                              textColor: "text-blue-600"
+                            }
+                          case "reserved":
+                            return {
+                              action: "Reserved",
+                              color: "bg-gradient-to-r from-amber-500 to-yellow-500",
+                              textColor: "text-amber-600"
+                            }
+                          default:
+                            return {
+                              action: "Processed",
+                              color: "bg-gradient-to-r from-gray-500 to-gray-400",
+                              textColor: "text-gray-600"
+                            }
+                        }
+                      }
+
+                      const actionInfo = getActionInfo()
+
+                      return (
+                        <div key={activity.id} className="flex items-center justify-between p-3 rounded-lg hover:bg-muted/30 transition-colors group">
+                          <div className="flex items-center gap-3 flex-1 min-w-0">
+                            <div
+                              className={cn(
+                                "w-2 h-2 rounded-full transition-all flex-shrink-0",
+                                actionInfo.color
+                              )}
+                            />
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-medium truncate text-foreground">
+                                {activity.title}
+                              </p>
+                              <p className="text-xs text-muted-foreground truncate">
+                                <span className={actionInfo.textColor}>{actionInfo.action}</span> 
+                                {" by "}
+                                <span className="font-medium text-foreground/90">{activity.borrowerName}</span>
+                              </p>
+                              {activity.author && activity.author !== "Unknown Author" && (
+                                <p className="text-xs text-muted-foreground truncate mt-1">
+                                  by {activity.author}
+                                </p>
+                              )}
+                            </div>
                           </div>
+                          <span className="text-xs text-muted-foreground bg-muted/50 px-2 py-1 rounded-full whitespace-nowrap flex-shrink-0 ml-2">
+                            {new Date(activity.created_at).toLocaleDateString()}
+                          </span>
                         </div>
-                        <span className="text-xs text-muted-foreground bg-muted/50 px-2 py-1 rounded-full">
-                          {new Date(activity.created_at).toLocaleDateString()}
-                        </span>
-                      </div>
-                    ))}
+                      )
+                    })}
                     {recentActivity.length === 0 && (
-                      <p className="text-center text-muted-foreground py-4">No recent activity</p>
+                      <div className="text-center py-8">
+                        <div className="w-12 h-12 bg-muted/30 rounded-full flex items-center justify-center mx-auto mb-3">
+                          <BookOpen className="h-6 w-6 text-muted-foreground" />
+                        </div>
+                        <p className="text-muted-foreground font-medium">No recent activity</p>
+                        <p className="text-sm text-muted-foreground mt-1">Library transactions will appear here</p>
+                      </div>
                     )}
                   </div>
                   <div className="mt-4">
@@ -468,10 +515,10 @@ export default function DashboardPage() {
                       <Button 
                         variant="outline" 
                         size="sm" 
-                        className="w-full bg-transparent backdrop-blur-sm border-border/50 hover:bg-muted/30"
+                        className="w-full bg-transparent backdrop-blur-sm border-border/50 hover:bg-muted/30 hover:border-indigo-200 transition-colors"
                       >
                         <Eye className="mr-2 h-4 w-4" />
-                        View All Activity
+                        View All Transactions
                       </Button>
                     </Link>
                   </div>
@@ -500,18 +547,24 @@ export default function DashboardPage() {
                           )}>
                             {index + 1}
                           </div>
-                          <div>
-                            <p className="text-sm font-medium">{book.title}</p>
-                            <p className="text-xs text-muted-foreground">{book.author}</p>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium truncate">{book.title}</p>
+                            <p className="text-xs text-muted-foreground truncate">{book.author}</p>
                           </div>
                         </div>
-                        <Badge variant="secondary" className="backdrop-blur-sm bg-muted/50">
+                        <Badge variant="secondary" className="backdrop-blur-sm bg-muted/50 whitespace-nowrap">
                           {book.checkouts} checkout{book.checkouts !== 1 ? 's' : ''}
                         </Badge>
                       </div>
                     ))}
                     {popularBooks.length === 0 && (
-                      <p className="text-center text-muted-foreground py-4">No popular books data</p>
+                      <div className="text-center py-8">
+                        <div className="w-12 h-12 bg-muted/30 rounded-full flex items-center justify-center mx-auto mb-3">
+                          <TrendingUp className="h-6 w-6 text-muted-foreground" />
+                        </div>
+                        <p className="text-muted-foreground font-medium">No popular books data</p>
+                        <p className="text-sm text-muted-foreground mt-1">Checkout data will appear here</p>
+                      </div>
                     )}
                   </div>
                 </CardContent>
