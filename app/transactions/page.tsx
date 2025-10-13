@@ -56,101 +56,119 @@ export default function TransactionsPage() {
   })
   const [sortConfig, setSortConfig] = useState({ key: "due_date", direction: "asc" }) // Default sort by due date ascending
 
-  // Fetch data with proper error handling
-  useEffect(() => {
+    // Fetch data with proper error handling
+    useEffect(() => {
     const fetchData = async () => {
       try {
-        setLoading(true)
-        
-        console.log("🔍 Starting data fetch...")
+        setLoading(true);
+        console.log("🔍 Starting data fetch...");
 
-        // Fetch all data separately to debug relationships
+        // Fetch loans (with joins), borrowers, and books in parallel
         const [
           { data: loansData, error: loansError },
           { data: borrowersData, error: borrowersError },
-          { data: booksData, error: booksError }
+          { data: booksData, error: booksError },
         ] = await Promise.all([
-          // Try to fetch loans with joins first
+          // ✅ Fetch loans with both borrowers + books joined
           supabase
-          .from("loans")
-          .select(`
-            id,
-            status,
-            due_date,
-            returned_date,
-            created_at,
-            loan_date,
-            patron_id,
-            book_id,
-            borrowers:borrowers!loans_patron_id_fkey ( id, name, email ),
-            books:books!loans_book_id_fkey ( id, title, author, isbn )
-          `)
+            .from("loans")
+            .select(`
+              id,
+              status,
+              due_date,
+              returned_date,
+              created_at,
+              loan_date,
+              patron_id,
+              book_id,
+              borrowers:borrowers!loans_patron_id_fkey (
+                id,
+                name,
+                email
+              ),
+              books:books!loans_book_id_fkey (
+                id,
+                title,
+                author,
+                isbn,
+                category,
+                status
+              )
+            `)
             .order("created_at", { ascending: false }),
-          
-          // Fetch all borrowers
+
+          // ✅ Fetch borrowers
           supabase
             .from("borrowers")
             .select("id, name, email, phone, status")
             .order("name"),
-          
-          // Fetch available books
+
+          // ✅ Fetch all books (not just available ones, in case you need full list)
           supabase
             .from("books")
-            .select("id, title, author, isbn, status")
-            .eq("status", "available")
-            .order("title")
-        ])
+            .select("id, title, author, isbn, category, status")
+            .order("title"),
+        ]);
 
-        // Handle loans data
+        // 🧩 Handle LOANS
         if (loansError) {
-          console.error("❌ Loans join error:", loansError)
-          
-          // If join fails, fetch loans without joins and we'll manually link the data
+          console.error("❌ Loans join error:", loansError);
+
+          // fallback: fetch simple loans and manually merge data
           const { data: simpleLoans, error: simpleError } = await supabase
             .from("loans")
             .select("*")
-            .order("created_at", { ascending: false })
-          
+            .order("created_at", { ascending: false });
+
           if (simpleError) {
-            console.error("❌ Simple loans error:", simpleError)
-            setTransactions([])
+            console.error("❌ Simple loans error:", simpleError);
+            setTransactions([]);
           } else {
-            console.log("📋 Loans without joins:", simpleLoans)
-            setTransactions(simpleLoans || [])
+            console.log("📋 Loans without joins:", simpleLoans);
+            setTransactions(simpleLoans || []);
           }
         } else {
-          console.log("✅ Loans with joins:", loansData)
-          setTransactions(loansData || [])
+          console.log("✅ Loans with joins:", loansData);
+
+          // optional: sanity check to ensure book titles exist
+          const enhancedLoans = loansData?.map((loan) => ({
+            ...loan,
+            book_title:
+              loan.books?.title ||
+              booksData?.find((b) => b.id === loan.book_id)?.title ||
+              `Book #${loan.book_id?.substring(0, 8)}...`,
+          }));
+
+          setTransactions(enhancedLoans || []);
         }
 
-        // Handle borrowers data
+        // 🧩 Handle BORROWERS
         if (borrowersError) {
-          console.error("❌ Borrowers error:", borrowersError)
-          setBorrowers([])
+          console.error("❌ Borrowers error:", borrowersError);
+          setBorrowers([]);
         } else {
-          console.log("✅ Borrowers:", borrowersData)
-          setBorrowers(borrowersData || [])
+          console.log("✅ Borrowers:", borrowersData);
+          setBorrowers(borrowersData || []);
         }
 
-        // Handle books data
+        // 🧩 Handle BOOKS
         if (booksError) {
-          console.error("❌ Books error:", booksError)
-          setBooks([])
+          console.error("❌ Books error:", booksError);
+          setBooks([]);
         } else {
-          console.log("✅ Books:", booksData)
-          setBooks(booksData || [])
+          console.log("✅ Books:", booksData);
+          setBooks(booksData || []);
         }
-
       } catch (error) {
-        console.error("❌ Unexpected error:", error)
-        toast.error("Failed to load data")
+        console.error("❌ Unexpected error:", error);
+        toast.error("Failed to load data");
       } finally {
-        setLoading(false)
+        setLoading(false);
       }
-    }
+    };
 
-    fetchData()
-  }, [])
+    fetchData();
+  }, []);
 
   // Function to check if a transaction is overdue
   const isOverdue = (transaction: Transaction): boolean => {
