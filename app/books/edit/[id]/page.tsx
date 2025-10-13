@@ -10,9 +10,10 @@ import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { ArrowLeft, Save, Trash2 } from "lucide-react"
+import { ArrowLeft, Save, Trash2, BookOpen, User, Hash, Tag, Loader2 } from "lucide-react"
 import Link from "next/link"
 import { createClient } from "@supabase/supabase-js"
+import { cn } from "@/lib/utils"
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -106,86 +107,120 @@ export default function EditBookPage() {
 
   return (
     <AuthGuard>
-      <div className="flex min-h-screen bg-background">
+      <div className="flex min-h-screen bg-gradient-to-br from-slate-50 via-blue-50/30 to-indigo-100/50">
         <Sidebar />
         <main className="flex-1 lg:ml-64 p-6">
           <div className="max-w-2xl mx-auto space-y-6">
+            {/* Header */}
             <div className="flex items-center gap-4">
               <Link href="/books">
-                <Button variant="ghost" size="sm">
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  className="backdrop-blur-sm border-border/50 hover:bg-muted/30"
+                >
                   <ArrowLeft className="mr-2 h-4 w-4" />
                   Back to Books
                 </Button>
               </Link>
               <div>
-                <h1 className="text-3xl font-bold text-foreground">Edit Book</h1>
+                <h1 className="text-3xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">
+                  Edit Book
+                </h1>
                 <p className="text-muted-foreground">Update book information</p>
               </div>
             </div>
 
-            <Card>
+            <Card className="backdrop-blur-xl border-border/30 bg-gradient-to-b from-background/95 to-background/90 shadow-lg shadow-indigo-500/10">
               <CardHeader>
-                <CardTitle>Book Details</CardTitle>
+                <CardTitle className="bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">
+                  Book Details
+                </CardTitle>
                 <CardDescription>Update the information for this book</CardDescription>
               </CardHeader>
               <CardContent>
                 <form onSubmit={handleSubmit} className="space-y-6">
                   {/* Title & Author */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="title">Title *</Label>
-                      <Input
-                        id="title"
-                        placeholder="Enter book title"
-                        value={formData.title}
-                        onChange={(e) => handleInputChange("title", e.target.value)}
-                        required
-                      />
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="space-y-3">
+                      <Label htmlFor="title" className="text-sm font-medium text-foreground/80">
+                        Title *
+                      </Label>
+                      <div className="relative">
+                        <BookOpen className="absolute left-3 top-3 h-4 w-4 text-indigo-600" />
+                        <Input
+                          id="title"
+                          placeholder="Enter book title"
+                          value={formData.title}
+                          onChange={(e) => handleInputChange("title", e.target.value)}
+                          required
+                          className="pl-11 bg-background/50 border-border/50 focus:border-indigo-300 transition-colors h-11"
+                        />
+                      </div>
                     </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="author">Author *</Label>
-                      <Input
-                        id="author"
-                        placeholder="Enter author name"
-                        value={formData.author}
-                        onChange={(e) => handleInputChange("author", e.target.value)}
-                        required
-                      />
+                    <div className="space-y-3">
+                      <Label htmlFor="author" className="text-sm font-medium text-foreground/80">
+                        Author *
+                      </Label>
+                      <div className="relative">
+                        <User className="absolute left-3 top-3 h-4 w-4 text-indigo-600" />
+                        <Input
+                          id="author"
+                          placeholder="Enter author name"
+                          value={formData.author}
+                          onChange={(e) => handleInputChange("author", e.target.value)}
+                          required
+                          className="pl-11 bg-background/50 border-border/50 focus:border-indigo-300 transition-colors h-11"
+                        />
+                      </div>
                     </div>
                   </div>
 
                   {/* ISBN & Category */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="isbn">ISBN *</Label>
-                      <Input
-                        id="isbn"
-                        placeholder="978-0-123456-78-9"
-                        value={formData.isbn}
-                        onChange={(e) => handleInputChange("isbn", e.target.value)}
-                        required
-                      />
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="space-y-3">
+                      <Label htmlFor="isbn" className="text-sm font-medium text-foreground/80">
+                        ISBN *
+                      </Label>
+                      <div className="relative">
+                        <Hash className="absolute left-3 top-3 h-4 w-4 text-indigo-600" />
+                        <Input
+                          id="isbn"
+                          placeholder="978-0-123456-78-9"
+                          value={formData.isbn}
+                          onChange={(e) => handleInputChange("isbn", e.target.value)}
+                          required
+                          className="pl-11 bg-background/50 border-border/50 focus:border-indigo-300 transition-colors h-11"
+                        />
+                      </div>
                     </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="category">Category *</Label>
-                      <Select value={formData.category} onValueChange={(value) => handleInputChange("category", value)}>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select category" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {["Fiction","Non-Fiction","Science","History","Biography","Romance","Mystery","Fantasy","Dystopian","Children"].map((cat) => (
-                            <SelectItem key={cat} value={cat}>{cat}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                    <div className="space-y-3">
+                      <Label htmlFor="category" className="text-sm font-medium text-foreground/80">
+                        Category *
+                      </Label>
+                      <div className="relative">
+                        <Tag className="absolute left-3 top-3 h-4 w-4 text-indigo-600 z-10" />
+                        <Select value={formData.category} onValueChange={(value) => handleInputChange("category", value)}>
+                          <SelectTrigger className="pl-11 bg-background/50 border-border/50 focus:border-indigo-300 h-11">
+                            <SelectValue placeholder="Select category" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {["Fiction","Non-Fiction","Science","History","Biography","Romance","Mystery","Fantasy","Dystopian","Children"].map((cat) => (
+                              <SelectItem key={cat} value={cat}>{cat}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
                     </div>
                   </div>
 
                   {/* Status */}
-                  <div className="space-y-2">
-                    <Label htmlFor="status">Status</Label>
+                  <div className="space-y-3">
+                    <Label htmlFor="status" className="text-sm font-medium text-foreground/80">
+                      Status
+                    </Label>
                     <Select value={formData.status} onValueChange={(value) => handleInputChange("status", value)}>
-                      <SelectTrigger>
+                      <SelectTrigger className="bg-background/50 border-border/50 focus:border-indigo-300 h-11">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
@@ -197,21 +232,53 @@ export default function EditBookPage() {
                   </div>
 
                   {error && (
-                    <Alert variant="destructive">
+                    <Alert variant="destructive" className="backdrop-blur-sm border-destructive/50">
                       <AlertDescription>{error}</AlertDescription>
                     </Alert>
                   )}
 
                   {/* Actions */}
-                  <div className="flex gap-4">
-                    <Button type="submit" disabled={isLoading} className="flex-1">
-                      {isLoading ? <><Save className="mr-2 h-4 w-4 animate-spin" />Updating...</> : <><Save className="mr-2 h-4 w-4" />Update Book</>}
+                  <div className="flex flex-col sm:flex-row gap-4 pt-4 border-t border-border/30">
+                    <Button 
+                      type="submit" 
+                      disabled={isLoading}
+                      className={cn(
+                        "flex-1 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700",
+                        "text-white shadow-lg shadow-indigo-500/25 hover:shadow-indigo-500/40",
+                        "transition-all duration-300 transform hover:scale-[1.02]",
+                        "border-0 h-11"
+                      )}
+                    >
+                      {isLoading ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          Updating...
+                        </>
+                      ) : (
+                        <>
+                          <Save className="mr-2 h-4 w-4" />
+                          Update Book
+                        </>
+                      )}
                     </Button>
-                    <Button type="button" variant="destructive" onClick={handleDelete} disabled={isLoading}>
-                      <Trash2 className="mr-2 h-4 w-4" />Delete
+                    <Button 
+                      type="button" 
+                      variant="destructive" 
+                      onClick={handleDelete} 
+                      disabled={isLoading}
+                      className="h-11 backdrop-blur-sm"
+                    >
+                      <Trash2 className="mr-2 h-4 w-4" />
+                      Delete
                     </Button>
-                    <Link href="/books">
-                      <Button type="button" variant="outline">Cancel</Button>
+                    <Link href="/books" className="flex-1">
+                      <Button 
+                        type="button" 
+                        variant="outline" 
+                        className="w-full h-11 backdrop-blur-sm border-border/50 hover:bg-muted/30"
+                      >
+                        Cancel
+                      </Button>
                     </Link>
                   </div>
                 </form>
