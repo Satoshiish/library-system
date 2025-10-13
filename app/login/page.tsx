@@ -94,7 +94,7 @@ export default function LoginPage() {
                 Email
               </Label>
               <div className="relative">
-                <User className="absolute left-3 top-3 bg-gradient-to-r from-indigo-500 to-purple-500 bg-clip-text text-transparent" />
+                <User className="fill-black absolute left-3 top-3 h-4 w-4 stroke-indigo-500" />
                 <Input
                   id="email"
                   type="email"
@@ -112,7 +112,7 @@ export default function LoginPage() {
                 Password
               </Label>
               <div className="relative">
-                <Shield className="fabsolute left-3 top-3 bg-gradient-to-r from-indigo-500 to-purple-500 bg-clip-text text-transparent" />
+                <Shield className="fill-black absolute left-3 top-3 h-4 w-4 stroke-indigo-500" />
                 <Input
                   id="password"
                   type="password"
