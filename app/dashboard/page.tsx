@@ -30,119 +30,146 @@ export default function DashboardPage() {
   const [overdueBooks, setOverdueBooks] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
 
-  // ✅ FIXED: Use the EXACT same overdue calculation as transactions page
-  const isOverdue = (loan: any): boolean => {
-    // If already returned, not overdue
-    if (loan.status === "returned" || loan.returned_date) {
-      return false
-    }
-
-    // Use doc_date as due date if available, otherwise use created_at + estimated period
-    const dueDate = loan.doc_date ? new Date(loan.doc_date) : new Date(loan.created_at)
-    
-    // Add default loan period (14 days) if no specific due date
-    if (!loan.doc_date) {
-      dueDate.setDate(dueDate.getDate() + 14)
-    }
-    
-    const today = new Date()
-    
-    dueDate.setHours(0, 0, 0, 0)
-    today.setHours(0, 0, 0, 0)
-    
-    return dueDate < today
-  }
-
-  // ✅ FIXED: Calculate days overdue - same as transactions
-  const getDaysOverdue = (loan: any): number => {
-    const dueDate = loan.doc_date ? new Date(loan.doc_date) : new Date(loan.created_at)
-    
-    // Add default loan period if no specific due date
-    if (!loan.doc_date) {
-      dueDate.setDate(dueDate.getDate() + 14)
-    }
-    
-    const today = new Date()
-    const diffTime = today.getTime() - dueDate.getTime()
-    return Math.max(0, Math.ceil(diffTime / (1000 * 60 * 60 * 24)))
-  }
-
   useEffect(() => {
     const fetchDashboardData = async () => {
       setLoading(true)
       try {
+        console.log("🔄 Starting dashboard data fetch...")
+
         // Fetch books
         const { data: booksData, error: booksError } = await supabase
           .from("books")
           .select("*")
         
-        if (booksError) console.error("Books fetch error:", booksError)
+        if (booksError) {
+          console.error("❌ Books fetch error:", booksError)
+        } else {
+          console.log("✅ Books data:", booksData?.length)
+        }
 
-        // ✅ FIXED: Use the EXACT same query as transactions page
-        const { data: loansData, error: loansError } = await supabase
+        // ✅ FIXED: Try different query approaches to find the right data structure
+        let loansData: any[] = []
+        let loansError: any = null
+
+        // Approach 1: Basic loans query
+        const { data: loansData1, error: error1 } = await supabase
           .from("loans")
-          .select(`
-            *,
-            patrons:patron_id (id, full_name, email, phone, status, member_since),
-            books:book_id (id, title, author, category, status)
-          `)
+          .select("*")
           .order("created_at", { ascending: false })
 
-        if (loansError) console.error("Loans fetch error:", loansError)
+        if (!error1 && loansData1 && loansData1.length > 0) {
+          console.log("✅ Approach 1 - Basic loans data:", loansData1.length)
+          console.log("📋 Sample loan:", loansData1[0])
+          loansData = loansData1
+        } else {
+          console.log("❌ Approach 1 failed:", error1)
+        }
 
-        // Fetch patrons (for stats)
+        // Approach 2: Try with joins if basic query works but no data
+        if (loansData.length === 0) {
+          const { data: loansData2, error: error2 } = await supabase
+            .from("loans")
+            .select(`
+              *,
+              patrons (*),
+              books (*)
+            `)
+            .order("created_at", { ascending: false })
+
+          if (!error2) {
+            console.log("✅ Approach 2 - Joined loans data:", loansData2?.length)
+            loansData = loansData2 || []
+          } else {
+            console.log("❌ Approach 2 failed:", error2)
+          }
+        }
+
+        // Fetch patrons
         const { data: patronsData, error: patronsError } = await supabase
           .from("patrons")
           .select("*")
         
-        if (patronsError) console.error("Patrons fetch error:", patronsError)
+        if (patronsError) {
+          console.error("❌ Patrons fetch error:", patronsError)
+        } else {
+          console.log("✅ Patrons data:", patronsData?.length)
+        }
 
-        console.log("📊 DASHBOARD DATA FETCH:")
-        console.log("Books count:", booksData?.length)
-        console.log("Loans count:", loansData?.length)
-        console.log("Patrons count:", patronsData?.length)
-
-        // Dashboard stats
+        // Calculate stats
         const totalBooks = booksData?.length || 0
         const availableBooks = booksData?.filter(b => b.status === "available").length || 0
         const checkedOutBooks = booksData?.filter(b => b.status === "checked_out").length || 0
         const reservedBooks = booksData?.filter(b => b.status === "reserved").length || 0
         const totalBorrowers = patronsData?.length || 0
 
-        // ✅ FIXED: Use the EXACT same overdue calculation as transactions page
-        const overdueLoans = loansData?.filter(loan => isOverdue(loan)) || []
+        // ✅ FIXED: Overdue calculation that matches transactions logic
+        const today = new Date()
+        today.setHours(0, 0, 0, 0)
+
+        console.log("📊 Analyzing loans for overdue calculation...")
+        console.log("Total loans found:", loansData.length)
+
+        const overdueLoans = loansData.filter(loan => {
+          // Skip returned loans
+          if (loan.status === "returned" || loan.returned_date) {
+            return false
+          }
+
+          // Determine due date - try different field names
+          let dueDate: Date | null = null
+          
+          // Try different possible due date fields
+          if (loan.due_date) {
+            dueDate = new Date(loan.due_date)
+          } else if (loan.doc_date) {
+            dueDate = new Date(loan.doc_date)
+          } else if (loan.created_at) {
+            // Default to created_at + 14 days if no due date
+            dueDate = new Date(loan.created_at)
+            dueDate.setDate(dueDate.getDate() + 14)
+          }
+
+          if (!dueDate || isNaN(dueDate.getTime())) {
+            console.log("❌ Invalid due date for loan:", loan.id, {
+              due_date: loan.due_date,
+              doc_date: loan.doc_date,
+              created_at: loan.created_at
+            })
+            return false
+          }
+
+          dueDate.setHours(0, 0, 0, 0)
+          
+          const isOverdue = dueDate < today
+          
+          if (isOverdue) {
+            console.log("🚨 OVERDUE LOAN FOUND:", {
+              loanId: loan.id,
+              status: loan.status,
+              dueDate: dueDate.toISOString(),
+              today: today.toISOString(),
+              book: loan.books?.title || loan.book_id,
+              patron: loan.patrons?.full_name || loan.patron_id
+            })
+          }
+          
+          return isOverdue
+        })
+
+        console.log("🎯 FINAL OVERDUE COUNT:", overdueLoans.length)
+        console.log("📋 Overdue loans details:", overdueLoans.map(loan => ({
+          id: loan.id,
+          status: loan.status,
+          due_date: loan.due_date,
+          doc_date: loan.doc_date,
+          returned_date: loan.returned_date,
+          book: loan.books?.title || loan.book_id,
+          patron: loan.patrons?.full_name || loan.patron_id
+        })))
 
         const overdueBooksCount = overdueLoans.length
 
-        console.log("📊 OVERDUE CALCULATION DETAILS:")
-        console.log("Total loans:", loansData?.length)
-        console.log("Overdue loans count:", overdueLoans.length)
-        console.log("Overdue loans details:", overdueLoans.map(loan => ({
-          id: loan.id,
-          status: loan.status,
-          returned_date: loan.returned_date,
-          doc_date: loan.doc_date,
-          created_at: loan.created_at,
-          book_title: loan.books?.title,
-          patron_name: loan.patrons?.full_name,
-          isOverdue: isOverdue(loan),
-          daysOverdue: getDaysOverdue(loan)
-        })))
-
-        // Debug: Check all active loans
-        const activeLoansDebug = loansData?.filter(loan => 
-          loan.status === "active" || loan.status === "borrowed" || (!loan.returned_date && loan.status !== "returned")
-        ) || []
-        
-        console.log("📊 ACTIVE LOANS DEBUG:", activeLoansDebug.map(loan => ({
-          id: loan.id,
-          status: loan.status,
-          returned_date: loan.returned_date,
-          doc_date: loan.doc_date,
-          book_title: loan.books?.title,
-          isOverdue: isOverdue(loan)
-        })))
-
+        // Update dashboard stats
         setDashboardStats({
           totalBooks,
           availableBooks,
@@ -152,31 +179,29 @@ export default function DashboardPage() {
           overdueBooks: overdueBooksCount,
         })
 
-        // ✅ FIXED: Recent activity - use ALL loans including overdue
-        const recentLoans = loansData?.slice(0, 5) || []
-        
-        const recentActivityWithBooks = recentLoans.map(loan => {
-          const isLoanOverdue = isOverdue(loan)
+        // Recent activity - show all recent loans
+        const recentActivityData = loansData.slice(0, 5).map(loan => {
+          const bookTitle = loan.books?.title || `Book ${loan.book_id}`
+          const patronName = loan.patrons?.full_name || `Patron ${loan.patron_id}`
+          
           return {
-            ...loan,
-            title: loan.books?.title || "Unknown Book",
+            id: loan.id,
+            title: bookTitle,
             author: loan.books?.author || "Unknown Author",
-            borrowerName: loan.patrons?.full_name || "Unknown Borrower",
-            isOverdue: isLoanOverdue
+            borrowerName: patronName,
+            status: loan.status,
+            created_at: loan.created_at,
+            returned_date: loan.returned_date
           }
         })
 
-        setRecentActivity(recentActivityWithBooks)
+        setRecentActivity(recentActivityData)
 
-        // Popular books - count checkouts from loans
+        // Popular books calculation
         const checkoutCounts: Record<string, number> = {}
-        loansData?.forEach(loan => {
-          // Count all loans except cancelled ones
-          if (loan.status !== "cancelled") {
-            const bookId = loan.book_id
-            if (bookId) {
-              checkoutCounts[bookId] = (checkoutCounts[bookId] || 0) + 1
-            }
+        loansData.forEach(loan => {
+          if (loan.book_id) {
+            checkoutCounts[loan.book_id] = (checkoutCounts[loan.book_id] || 0) + 1
           }
         })
 
@@ -198,31 +223,35 @@ export default function DashboardPage() {
         setPopularBooks(popularBooksList)
 
         // Overdue books for display
-        const overdueBooksList = overdueLoans
-          .map(loan => {
-            const book = booksData?.find(b => b.id === loan.book_id)
-            if (!book) return null
+        const overdueBooksList = overdueLoans.map(loan => {
+          const book = booksData?.find(b => b.id === loan.book_id)
+          const dueDate = loan.due_date ? new Date(loan.due_date) : 
+                         loan.doc_date ? new Date(loan.doc_date) : 
+                         new Date(loan.created_at)
+          
+          if (!loan.doc_date && !loan.due_date) {
+            dueDate.setDate(dueDate.getDate() + 14) // Add default loan period
+          }
 
-            const daysOverdue = getDaysOverdue(loan)
+          const daysOverdue = Math.max(0, Math.ceil((today.getTime() - dueDate.getTime()) / (1000 * 60 * 60 * 24)))
 
-            return {
-              id: book.id,
-              title: book.title,
-              author: book.author,
-              borrower: loan.patrons?.full_name || "Unknown",
-              dueDate: loan.doc_date || loan.created_at,
-              daysOverdue,
-              loanId: loan.id,
-              patronId: loan.patron_id
-            }
-          })
-          .filter(Boolean)
+          return {
+            id: loan.id,
+            title: book?.title || `Book ${loan.book_id}`,
+            author: book?.author || "Unknown Author",
+            borrower: loan.patrons?.full_name || `Patron ${loan.patron_id}`,
+            dueDate: dueDate.toISOString(),
+            daysOverdue,
+            loanId: loan.id,
+            patronId: loan.patron_id
+          }
+        })
 
-        console.log("📊 OVERDUE BOOKS FOR DISPLAY:", overdueBooksList)
+        console.log("📚 Overdue books for display:", overdueBooksList)
         setOverdueBooks(overdueBooksList)
 
       } catch (err) {
-        console.error("Error fetching dashboard data:", err)
+        console.error("❌ Error fetching dashboard data:", err)
       } finally {
         setLoading(false)
       }
@@ -365,6 +394,25 @@ export default function DashboardPage() {
               </Card>
             </div>
 
+            {/* Debug Info - Remove in production */}
+            <Card className="bg-yellow-50 border-yellow-200">
+              <CardHeader>
+                <CardTitle className="text-yellow-800 text-sm">Debug Information</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <pre className="text-xs text-yellow-700">
+                  {JSON.stringify({
+                    totalBooks: dashboardStats.totalBooks,
+                    availableBooks: dashboardStats.availableBooks,
+                    checkedOutBooks: dashboardStats.checkedOutBooks,
+                    overdueBooks: dashboardStats.overdueBooks,
+                    overdueBooksList: overdueBooks,
+                    recentActivity: recentActivity.length
+                  }, null, 2)}
+                </pre>
+              </CardContent>
+            </Card>
+
             {/* Additional Stats Cards */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <Card className="backdrop-blur-xl border-border/30 bg-gradient-to-b from-background/95 to-background/90 shadow-lg shadow-indigo-500/10">
@@ -412,9 +460,7 @@ export default function DashboardPage() {
                           <div
                             className={cn(
                               "w-2 h-2 rounded-full transition-all",
-                              activity.isOverdue
-                                ? "bg-gradient-to-r from-red-500 to-orange-500"
-                                : activity.status === "active" || activity.status === "borrowed"
+                              activity.status === "active" || activity.status === "borrowed"
                                 ? "bg-gradient-to-r from-blue-500 to-cyan-500" 
                                 : "bg-gradient-to-r from-green-500 to-emerald-500"
                             )}
@@ -422,16 +468,12 @@ export default function DashboardPage() {
                           <div>
                             <p className="text-sm font-medium">{activity.title}</p>
                             <p className="text-xs text-muted-foreground">
-                              {activity.isOverdue ? "OVERDUE • " : ""}
                               {activity.status} by {activity.borrowerName}
                             </p>
                           </div>
                         </div>
                         <span className="text-xs text-muted-foreground bg-muted/50 px-2 py-1 rounded-full">
-                          {new Date(activity.created_at).toLocaleTimeString([], {
-                            hour: "2-digit",
-                            minute: "2-digit",
-                          })}
+                          {new Date(activity.created_at).toLocaleDateString()}
                         </span>
                       </div>
                     ))}
