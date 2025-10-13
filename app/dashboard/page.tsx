@@ -37,57 +37,54 @@ export default function DashboardPage() {
         // Fetch books
         const { data: booksData } = await supabase.from("books").select("*")
 
-        // ✅ Fetch loans with borrower and book info - FIXED: Proper overdue calculation
+        // ✅ FIXED: Fetch loans with the SAME query as transactions page
         const { data: loansData } = await supabase
           .from("loans")
           .select(`
             *,
-            borrower:borrower_id(name),
-            books:book_id(title, status)
+            patrons:patron_id (id, full_name, email, phone, status, member_since),
+            books:book_id (id, title, author, category, status)
           `)
+          .order("created_at", { ascending: false })
 
-        // Fetch borrowers (for stats)
-        const { data: borrowersData } = await supabase.from("borrowers").select("*")
+        // Fetch patrons (for stats)
+        const { data: patronsData } = await supabase.from("patrons").select("*")
+
+        console.log("📊 Loans Data for Dashboard:", loansData)
 
         // Dashboard stats
         const totalBooks = booksData?.length || 0
         const availableBooks = booksData?.filter(b => b.status === "available").length || 0
         const checkedOutBooks = booksData?.filter(b => b.status === "checked_out").length || 0
         const reservedBooks = booksData?.filter(b => b.status === "reserved").length || 0
-        const totalBorrowers = borrowersData?.length || 0
+        const totalBorrowers = patronsData?.length || 0
 
-        // ✅ FIXED: Proper overdue calculation - Count loans that are overdue, not book status
+        // ✅ FIXED: Use the EXACT same overdue calculation as transactions page
         const today = new Date()
-        today.setHours(0, 0, 0, 0) // Normalize to start of day for accurate comparison
+        today.setHours(0, 0, 0, 0)
 
         const overdueLoans = loansData?.filter(loan => {
-          // Skip returned loans
+          // Skip returned loans - same logic as transactions
           if (loan.status === "returned" || loan.returned_date) return false
           
-          // Check if due date is in the past
+          // Check if due date is in the past - same logic as transactions
           const dueDate = new Date(loan.due_date)
-          dueDate.setHours(0, 0, 0, 0) // Normalize to start of day
+          dueDate.setHours(0, 0, 0, 0)
           
           return dueDate < today
         }) || []
 
         const overdueBooksCount = overdueLoans.length
 
-        console.log("📊 Dashboard Stats:", {
-          totalBooks,
-          availableBooks,
-          checkedOutBooks,
-          reservedBooks,
-          totalBorrowers,
-          overdueBooksCount,
+        console.log("📊 Overdue Calculation:", {
           totalLoans: loansData?.length,
-          overdueLoans: overdueLoans.length,
+          overdueLoansCount: overdueLoans.length,
           overdueLoanDetails: overdueLoans.map(loan => ({
             id: loan.id,
             due_date: loan.due_date,
             status: loan.status,
             book_title: loan.books?.title,
-            borrower: loan.borrower?.name
+            patron: loan.patrons?.full_name
           }))
         })
 
@@ -100,20 +97,21 @@ export default function DashboardPage() {
           overdueBooks: overdueBooksCount,
         })
 
-        // ✅ Recent activity now includes borrower name
-        const activeLoans = loansData?.filter(l => l.status === "active" || l.status === "borrowed") || []
-        const recentActivityWithBooks = activeLoans.map(loan => {
-          const book = booksData?.find(b => b.id === loan.book_id)
-          return {
-            ...loan,
-            title: book?.title || loan.books?.title || "Unknown Book",
-            author: book?.author || "Unknown Author",
-            borrowerName: loan.borrower?.name || "Unknown Borrower",
-          }
-        })
-        setRecentActivity(recentActivityWithBooks.slice(0, 5)) // Limit to 5 most recent
+        // ✅ FIXED: Recent activity - use loans data with patron info
+        const activeLoans = loansData?.filter(l => 
+          l.status === "active" || l.status === "borrowed"
+        ) || []
+        
+        const recentActivityWithBooks = activeLoans.slice(0, 5).map(loan => ({
+          ...loan,
+          title: loan.books?.title || "Unknown Book",
+          author: loan.books?.author || "Unknown Author",
+          borrowerName: loan.patrons?.full_name || "Unknown Borrower",
+        }))
 
-        // Popular books
+        setRecentActivity(recentActivityWithBooks)
+
+        // Popular books - count checkouts from loans
         const checkoutCounts: Record<string, number> = {}
         loansData?.forEach(loan => {
           if (loan.status === "active" || loan.status === "returned" || loan.status === "borrowed") {
@@ -133,7 +131,7 @@ export default function DashboardPage() {
 
         setPopularBooks(popularBooksList)
 
-        // Overdue books (already includes borrower info)
+        // Overdue books for display
         const overdueBooksList = overdueLoans
           .map(loan => {
             const book = booksData?.find(b => b.id === loan.book_id)
@@ -147,7 +145,7 @@ export default function DashboardPage() {
 
             return {
               ...book,
-              borrower: loan.borrower?.name || "Unknown",
+              borrower: loan.patrons?.full_name || "Unknown",
               dueDate: !isNaN(dueDateObj.getTime()) ? dueDateObj.toISOString().split("T")[0] : "Unknown",
               daysOverdue,
               loanId: loan.id
