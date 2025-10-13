@@ -34,66 +34,25 @@ export default function DashboardPage() {
     const fetchDashboardData = async () => {
       setLoading(true)
       try {
-        console.log("🔄 Starting dashboard data fetch...")
-
         // Fetch books
-        const { data: booksData, error: booksError } = await supabase
+        const { data: booksData } = await supabase
           .from("books")
           .select("*")
         
-        if (booksError) {
-          console.error("❌ Books fetch error:", booksError)
-        } else {
-          console.log("✅ Books data:", booksData?.length)
-        }
-
-        // ✅ FIXED: Try different query approaches to find the right data structure
-        let loansData: any[] = []
-        let loansError: any = null
-
-        // Approach 1: Basic loans query
-        const { data: loansData1, error: error1 } = await supabase
+        // Fetch loans with proper joins
+        const { data: loansData } = await supabase
           .from("loans")
-          .select("*")
+          .select(`
+            *,
+            patrons (*),
+            books (*)
+          `)
           .order("created_at", { ascending: false })
 
-        if (!error1 && loansData1 && loansData1.length > 0) {
-          console.log("✅ Approach 1 - Basic loans data:", loansData1.length)
-          console.log("📋 Sample loan:", loansData1[0])
-          loansData = loansData1
-        } else {
-          console.log("❌ Approach 1 failed:", error1)
-        }
-
-        // Approach 2: Try with joins if basic query works but no data
-        if (loansData.length === 0) {
-          const { data: loansData2, error: error2 } = await supabase
-            .from("loans")
-            .select(`
-              *,
-              patrons (*),
-              books (*)
-            `)
-            .order("created_at", { ascending: false })
-
-          if (!error2) {
-            console.log("✅ Approach 2 - Joined loans data:", loansData2?.length)
-            loansData = loansData2 || []
-          } else {
-            console.log("❌ Approach 2 failed:", error2)
-          }
-        }
-
         // Fetch patrons
-        const { data: patronsData, error: patronsError } = await supabase
+        const { data: patronsData } = await supabase
           .from("patrons")
           .select("*")
-        
-        if (patronsError) {
-          console.error("❌ Patrons fetch error:", patronsError)
-        } else {
-          console.log("✅ Patrons data:", patronsData?.length)
-        }
 
         // Calculate stats
         const totalBooks = booksData?.length || 0
@@ -102,23 +61,19 @@ export default function DashboardPage() {
         const reservedBooks = booksData?.filter(b => b.status === "reserved").length || 0
         const totalBorrowers = patronsData?.length || 0
 
-        // ✅ FIXED: Overdue calculation that matches transactions logic
+        // Overdue calculation
         const today = new Date()
         today.setHours(0, 0, 0, 0)
 
-        console.log("📊 Analyzing loans for overdue calculation...")
-        console.log("Total loans found:", loansData.length)
-
-        const overdueLoans = loansData.filter(loan => {
+        const overdueLoans = loansData?.filter(loan => {
           // Skip returned loans
           if (loan.status === "returned" || loan.returned_date) {
             return false
           }
 
-          // Determine due date - try different field names
+          // Determine due date
           let dueDate: Date | null = null
           
-          // Try different possible due date fields
           if (loan.due_date) {
             dueDate = new Date(loan.due_date)
           } else if (loan.doc_date) {
@@ -130,42 +85,12 @@ export default function DashboardPage() {
           }
 
           if (!dueDate || isNaN(dueDate.getTime())) {
-            console.log("❌ Invalid due date for loan:", loan.id, {
-              due_date: loan.due_date,
-              doc_date: loan.doc_date,
-              created_at: loan.created_at
-            })
             return false
           }
 
           dueDate.setHours(0, 0, 0, 0)
-          
-          const isOverdue = dueDate < today
-          
-          if (isOverdue) {
-            console.log("🚨 OVERDUE LOAN FOUND:", {
-              loanId: loan.id,
-              status: loan.status,
-              dueDate: dueDate.toISOString(),
-              today: today.toISOString(),
-              book: loan.books?.title || loan.book_id,
-              patron: loan.patrons?.full_name || loan.patron_id
-            })
-          }
-          
-          return isOverdue
-        })
-
-        console.log("🎯 FINAL OVERDUE COUNT:", overdueLoans.length)
-        console.log("📋 Overdue loans details:", overdueLoans.map(loan => ({
-          id: loan.id,
-          status: loan.status,
-          due_date: loan.due_date,
-          doc_date: loan.doc_date,
-          returned_date: loan.returned_date,
-          book: loan.books?.title || loan.book_id,
-          patron: loan.patrons?.full_name || loan.patron_id
-        })))
+          return dueDate < today
+        }) || []
 
         const overdueBooksCount = overdueLoans.length
 
@@ -179,27 +104,31 @@ export default function DashboardPage() {
           overdueBooks: overdueBooksCount,
         })
 
-        // Recent activity - show all recent loans
-        const recentActivityData = loansData.slice(0, 5).map(loan => {
-          const bookTitle = loan.books?.title || `Book ${loan.book_id}`
-          const patronName = loan.patrons?.full_name || `Patron ${loan.patron_id}`
+        // Recent activity - show all recent loans with proper names
+        const recentActivityData = loansData?.slice(0, 5).map(loan => {
+          const bookTitle = loan.books?.title || "Unknown Book"
+          const patronName = loan.patrons?.full_name || "Unknown Patron"
+          const actionType = loan.status === "returned" ? "Returned" : 
+                           loan.status === "borrowed" ? "Borrowed" : 
+                           loan.status === "active" ? "Checked Out" : "Processed"
           
           return {
             id: loan.id,
             title: bookTitle,
             author: loan.books?.author || "Unknown Author",
             borrowerName: patronName,
+            action: actionType,
             status: loan.status,
             created_at: loan.created_at,
             returned_date: loan.returned_date
           }
-        })
+        }) || []
 
         setRecentActivity(recentActivityData)
 
         // Popular books calculation
         const checkoutCounts: Record<string, number> = {}
-        loansData.forEach(loan => {
+        loansData?.forEach(loan => {
           if (loan.book_id) {
             checkoutCounts[loan.book_id] = (checkoutCounts[loan.book_id] || 0) + 1
           }
@@ -230,16 +159,16 @@ export default function DashboardPage() {
                          new Date(loan.created_at)
           
           if (!loan.doc_date && !loan.due_date) {
-            dueDate.setDate(dueDate.getDate() + 14) // Add default loan period
+            dueDate.setDate(dueDate.getDate() + 14)
           }
 
           const daysOverdue = Math.max(0, Math.ceil((today.getTime() - dueDate.getTime()) / (1000 * 60 * 60 * 24)))
 
           return {
             id: loan.id,
-            title: book?.title || `Book ${loan.book_id}`,
+            title: book?.title || "Unknown Book",
             author: book?.author || "Unknown Author",
-            borrower: loan.patrons?.full_name || `Patron ${loan.patron_id}`,
+            borrower: loan.patrons?.full_name || "Unknown Patron",
             dueDate: dueDate.toISOString(),
             daysOverdue,
             loanId: loan.id,
@@ -247,11 +176,10 @@ export default function DashboardPage() {
           }
         })
 
-        console.log("📚 Overdue books for display:", overdueBooksList)
         setOverdueBooks(overdueBooksList)
 
       } catch (err) {
-        console.error("❌ Error fetching dashboard data:", err)
+        console.error("Error fetching dashboard data:", err)
       } finally {
         setLoading(false)
       }
@@ -394,30 +322,11 @@ export default function DashboardPage() {
               </Card>
             </div>
 
-            {/* Debug Info - Remove in production */}
-            <Card className="bg-yellow-50 border-yellow-200">
-              <CardHeader>
-                <CardTitle className="text-yellow-800 text-sm">Debug Information</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <pre className="text-xs text-yellow-700">
-                  {JSON.stringify({
-                    totalBooks: dashboardStats.totalBooks,
-                    availableBooks: dashboardStats.availableBooks,
-                    checkedOutBooks: dashboardStats.checkedOutBooks,
-                    overdueBooks: dashboardStats.overdueBooks,
-                    overdueBooksList: overdueBooks,
-                    recentActivity: recentActivity.length
-                  }, null, 2)}
-                </pre>
-              </CardContent>
-            </Card>
-
             {/* Additional Stats Cards */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <Card className="backdrop-blur-xl border-border/30 bg-gradient-to-b from-background/95 to-background/90 shadow-lg shadow-indigo-500/10">
                 <CardHeader className="flex flex-row items-center justify-between pb-2">
-                  <CardTitle className="text-sm font-medium text-foreground/80">Total Borrowers</CardTitle>
+                  <CardTitle className="text-sm font-medium text-foreground/80">Total Patrons</CardTitle>
                   <div className="p-2 rounded-lg bg-gradient-to-tr from-purple-500/20 to-pink-500/20">
                     <Users className="h-4 w-4 text-purple-600" />
                   </div>
@@ -450,7 +359,7 @@ export default function DashboardPage() {
                   <CardTitle className="bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">
                     Recent Activity
                   </CardTitle>
-                  <CardDescription>Latest library transactions</CardDescription>
+                  <CardDescription>Latest library transactions and book movements</CardDescription>
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-4">
@@ -460,19 +369,19 @@ export default function DashboardPage() {
                           <div
                             className={cn(
                               "w-2 h-2 rounded-full transition-all",
-                              activity.status === "active" || activity.status === "borrowed"
-                                ? "bg-gradient-to-r from-blue-500 to-cyan-500" 
-                                : "bg-gradient-to-r from-green-500 to-emerald-500"
+                              activity.status === "returned" 
+                                ? "bg-gradient-to-r from-green-500 to-emerald-500"
+                                : "bg-gradient-to-r from-blue-500 to-cyan-500"
                             )}
                           />
-                          <div>
-                            <p className="text-sm font-medium">{activity.title}</p>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium truncate">{activity.title}</p>
                             <p className="text-xs text-muted-foreground">
-                              {activity.status} by {activity.borrowerName}
+                              {activity.action} by {activity.borrowerName}
                             </p>
                           </div>
                         </div>
-                        <span className="text-xs text-muted-foreground bg-muted/50 px-2 py-1 rounded-full">
+                        <span className="text-xs text-muted-foreground bg-muted/50 px-2 py-1 rounded-full whitespace-nowrap">
                           {new Date(activity.created_at).toLocaleDateString()}
                         </span>
                       </div>
@@ -489,7 +398,7 @@ export default function DashboardPage() {
                         className="w-full bg-transparent backdrop-blur-sm border-border/50 hover:bg-muted/30"
                       >
                         <Eye className="mr-2 h-4 w-4" />
-                        View All Activity
+                        View All Transactions
                       </Button>
                     </Link>
                   </div>
@@ -518,18 +427,18 @@ export default function DashboardPage() {
                           )}>
                             {index + 1}
                           </div>
-                          <div>
-                            <p className="text-sm font-medium">{book.title}</p>
-                            <p className="text-xs text-muted-foreground">{book.author}</p>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium truncate">{book.title}</p>
+                            <p className="text-xs text-muted-foreground truncate">{book.author}</p>
                           </div>
                         </div>
-                        <Badge variant="secondary" className="backdrop-blur-sm bg-muted/50">
+                        <Badge variant="secondary" className="backdrop-blur-sm bg-muted/50 whitespace-nowrap">
                           {book.checkouts} checkout{book.checkouts !== 1 ? 's' : ''}
                         </Badge>
                       </div>
                     ))}
                     {popularBooks.length === 0 && (
-                      <p className="text-center text-muted-foreground py-4">No popular books data</p>
+                      <p className="text-center text-muted-foreground py-4">No checkout data available</p>
                     )}
                   </div>
                 </CardContent>
