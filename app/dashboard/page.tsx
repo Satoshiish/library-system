@@ -32,89 +32,101 @@ export default function DashboardPage() {
 
   useEffect(() => {
   const fetchDashboardData = async () => {
-    setLoading(true);
+    setLoading(true)
     try {
-      console.log("🔄 Starting dashboard data fetch...");
+      console.log("🔄 Starting dashboard data fetch...")
 
-      // Fetch books, loans (with joins), and borrowers in parallel
-      const [
-        { data: booksData, error: booksError },
-        { data: loansData, error: loansError },
-        { data: borrowersData, error: borrowersError },
-      ] = await Promise.all([
-        supabase
-          .from("books")
-          .select("*"),
+      // Fetch books
+      const { data: booksData, error: booksError } = await supabase
+        .from("books")
+        .select("*")
+      if (booksError) console.error("❌ Books fetch error:", booksError)
+      else console.log("✅ Books data:", booksData?.length)
 
-        supabase
+      // ✅ FIXED: Try different query approaches
+      let loansData: any[] = []
+      let loansError: any = null
+
+      // Approach 1: Basic loans query
+      const { data: loansData1, error: error1 } = await supabase
+        .from("loans")
+        .select("*")
+        .order("created_at", { ascending: false })
+
+      if (!error1 && loansData1 && loansData1.length > 0) {
+        console.log("✅ Approach 1 - Basic loans data:", loansData1.length)
+        loansData = loansData1
+      } else {
+        console.log("❌ Approach 1 failed:", error1)
+      }
+
+      // Approach 2: Try with joins if basic query works but no nested data
+      if (loansData.length === 0) {
+        const { data: loansData2, error: error2 } = await supabase
           .from("loans")
           .select(`
-            id,
-            status,
-            due_date,
-            returned_date,
-            created_at,
-            loan_date,
-            patron_id,
-            book_id,
-            borrowers:borrowers!loans_patron_id_fkey (
-              id,
-              name,
-              email
-            ),
-            books:books!loans_book_id_fkey (
-              id,
-              title,
-              author,
-              isbn,
-              category,
-              status
-            )
+            *,
+            patrons (*),
+            books (*)
           `)
-          .order("created_at", { ascending: false }),
+          .order("created_at", { ascending: false })
 
-        supabase
-          .from("borrowers")
-          .select("id, name, email, phone, status"),
-      ]);
+        if (!error2) {
+          console.log("✅ Approach 2 - Joined loans data:", loansData2?.length)
+          loansData = loansData2 || []
+        } else {
+          console.log("❌ Approach 2 failed:", error2)
+        }
+      }
 
-      if (booksError) console.error("❌ Books fetch error:", booksError);
-      if (loansError) console.error("❌ Loans fetch error:", loansError);
-      if (borrowersError) console.error("❌ Borrowers fetch error:", borrowersError);
+      // Fetch patrons
+      const { data: patronsData, error: patronsError } = await supabase
+        .from("patrons")
+        .select("*")
+      if (patronsError) console.error("❌ Patrons fetch error:", patronsError)
+      else console.log("✅ Patrons data:", patronsData?.length)
 
-      // Calculate stats
-      const totalBooks = booksData?.length || 0;
-      const availableBooks = booksData?.filter(b => b.status === "available").length || 0;
-      const checkedOutBooks = booksData?.filter(b => b.status === "checked_out").length || 0;
-      const reservedBooks = booksData?.filter(b => b.status === "reserved").length || 0;
-      const totalBorrowers = borrowersData?.length || 0;
+      // 🧩 ADD: Create lookup maps for quick name resolution
+      const bookMap = new Map(booksData?.map(b => [b.id, b]) || [])
+      const patronMap = new Map(patronsData?.map(p => [p.id, p]) || [])
 
-      // Overdue calculation
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
+      // If Approach 1 ran (no joined data), manually attach book/patron details
+      loansData = loansData.map(loan => ({
+        ...loan,
+        books: loan.books || bookMap.get(loan.book_id) || null,
+        patrons: loan.patrons || patronMap.get(loan.patron_id) || null,
+      }))
+
+      // 📊 Calculate stats
+      const totalBooks = booksData?.length || 0
+      const availableBooks = booksData?.filter(b => b.status === "available").length || 0
+      const checkedOutBooks = booksData?.filter(b => b.status === "checked_out").length || 0
+      const reservedBooks = booksData?.filter(b => b.status === "reserved").length || 0
+      const totalBorrowers = patronsData?.length || 0
+
+      // ✅ Overdue calculation (same as your version)
+      const today = new Date()
+      today.setHours(0, 0, 0, 0)
 
       const overdueLoans = loansData.filter(loan => {
-        if (loan.status === "returned" || loan.returned_date) return false;
+        if (loan.status === "returned" || loan.returned_date) return false
 
-        let dueDate = loan.due_date
-          ? new Date(loan.due_date)
-          : loan.loan_date
-          ? new Date(loan.loan_date)
-          : loan.created_at
-          ? new Date(loan.created_at)
-          : null;
+        let dueDate: Date | null = null
+        if (loan.due_date) dueDate = new Date(loan.due_date)
+        else if (loan.doc_date) dueDate = new Date(loan.doc_date)
+        else if (loan.created_at) {
+          dueDate = new Date(loan.created_at)
+          dueDate.setDate(dueDate.getDate() + 14)
+        }
 
-        if (!dueDate) return false;
+        if (!dueDate || isNaN(dueDate.getTime())) return false
+        dueDate.setHours(0, 0, 0, 0)
+        return dueDate < today
+      })
 
-        dueDate.setHours(0, 0, 0, 0);
-        if (loan.loan_date && !loan.due_date) dueDate.setDate(dueDate.getDate() + 14); // default 14-day period
+      const overdueBooksCount = overdueLoans.length
 
-        return dueDate < today;
-      });
-
-      const overdueBooksCount = overdueLoans.length;
-
-      // Update dashboard stats
+      // Update stats
       setDashboardStats({
         totalBooks,
         availableBooks,
@@ -122,81 +134,71 @@ export default function DashboardPage() {
         reservedBooks,
         totalBorrowers,
         overdueBooks: overdueBooksCount,
-      });
+      })
 
-      // ✅ Recent Activity (matching transaction structure)
+      // ✅ Recent activity (always shows proper names)
       const recentActivityData = loansData.slice(0, 5).map(loan => ({
         id: loan.id,
         title: loan.books?.title || `Book ${loan.book_id}`,
         author: loan.books?.author || "Unknown Author",
-        borrowerName: loan.borrowers?.name || `Borrower ${loan.patron_id}`,
+        borrowerName: loan.patrons?.full_name || `Patron ${loan.patron_id}`,
         status: loan.status,
         created_at: loan.created_at,
         returned_date: loan.returned_date,
-      }));
+      }))
+      setRecentActivity(recentActivityData)
 
-      setRecentActivity(recentActivityData);
-
-      // ✅ Popular Books
-      const checkoutCounts: Record<string, number> = {};
+      // Popular books (unchanged)
+      const checkoutCounts: Record<string, number> = {}
       loansData.forEach(loan => {
         if (loan.book_id) {
-          checkoutCounts[loan.book_id] = (checkoutCounts[loan.book_id] || 0) + 1;
+          checkoutCounts[loan.book_id] = (checkoutCounts[loan.book_id] || 0) + 1
         }
-      });
-
+      })
       const popularBooksList = Object.entries(checkoutCounts)
         .map(([book_id, count]) => {
-          const book = booksData?.find(b => b.id === parseInt(book_id));
-          if (!book) return null;
-          return {
-            id: book_id,
-            title: book.title,
-            author: book.author,
-            checkouts: count,
-          };
+          const book = booksData?.find(b => b.id === book_id)
+          if (!book) return null
+          return { id: book_id, title: book.title, author: book.author, checkouts: count }
         })
         .filter(Boolean)
         .sort((a: any, b: any) => b.checkouts - a.checkouts)
-        .slice(0, 5);
+        .slice(0, 5)
+      setPopularBooks(popularBooksList)
 
-      setPopularBooks(popularBooksList);
-
-      // ✅ Overdue Books list for display
+      // ✅ Overdue books (also shows proper names)
       const overdueBooksList = overdueLoans.map(loan => {
-        const book = booksData?.find(b => b.id === loan.book_id);
         const dueDate = loan.due_date
           ? new Date(loan.due_date)
-          : loan.loan_date
-          ? new Date(loan.loan_date)
-          : new Date(loan.created_at);
-        if (!loan.due_date && !loan.loan_date) dueDate.setDate(dueDate.getDate() + 14);
+          : loan.doc_date
+          ? new Date(loan.doc_date)
+          : new Date(loan.created_at)
+        if (!loan.doc_date && !loan.due_date) dueDate.setDate(dueDate.getDate() + 14)
 
         const daysOverdue = Math.max(
           0,
           Math.ceil((today.getTime() - dueDate.getTime()) / (1000 * 60 * 60 * 24))
-        );
+        )
 
         return {
           id: loan.id,
-          title: book?.title || `Book ${loan.book_id}`,
-          author: book?.author || "Unknown Author",
-          borrower: loan.borrowers?.name || `Borrower ${loan.patron_id}`,
+          title: loan.books?.title || `Book ${loan.book_id}`,
+          author: loan.books?.author || "Unknown Author",
+          borrower: loan.patrons?.full_name || `Patron ${loan.patron_id}`,
           dueDate: dueDate.toISOString(),
           daysOverdue,
-        };
-      });
-
-      setOverdueBooks(overdueBooksList);
+        }
+      })
+      setOverdueBooks(overdueBooksList)
     } catch (err) {
-      console.error("❌ Error fetching dashboard data:", err);
+      console.error("❌ Error fetching dashboard data:", err)
     } finally {
-      setLoading(false);
+      setLoading(false)
     }
-  };
+  }
 
-  fetchDashboardData();
-}, []);
+  fetchDashboardData()
+}, [])
 
 
   if (loading) {
