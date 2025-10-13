@@ -6,7 +6,7 @@ import { Sidebar } from "@/components/layout/sidebar"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { BookOpen, User, Clock, TrendingUp, Plus, Eye, Loader2, ArrowUpRight, Users, BookCopy } from "lucide-react"
+import { BookOpen, User, Clock, TrendingUp, Plus, Eye, Loader2, ArrowUpRight, Users, BookCopy, AlertTriangle } from "lucide-react"
 import Link from "next/link"
 import { createClient } from "@supabase/supabase-js"
 import { cn } from "@/lib/utils"
@@ -72,23 +72,35 @@ export default function DashboardPage() {
       setLoading(true)
       try {
         // Fetch books
-        const { data: booksData } = await supabase.from("books").select("*")
+        const { data: booksData, error: booksError } = await supabase
+          .from("books")
+          .select("*")
+        
+        if (booksError) console.error("Books fetch error:", booksError)
 
-        // ✅ FIXED: Fetch loans with proper schema alignment
-        const { data: loansData } = await supabase
+        // ✅ FIXED: Use the EXACT same query as transactions page
+        const { data: loansData, error: loansError } = await supabase
           .from("loans")
           .select(`
             *,
-            patrons!inner (id, full_name, email, phone, status, member_since),
+            patrons:patron_id (id, full_name, email, phone, status, member_since),
             books:book_id (id, title, author, category, status)
           `)
           .order("created_at", { ascending: false })
 
-        // Fetch patrons (for stats)
-        const { data: patronsData } = await supabase.from("patrons").select("*")
+        if (loansError) console.error("Loans fetch error:", loansError)
 
-        console.log("📊 Loans Data for Dashboard:", loansData)
-        console.log("📊 Schema Fields for Loans:", loansData?.[0] ? Object.keys(loansData[0]) : "No loans data")
+        // Fetch patrons (for stats)
+        const { data: patronsData, error: patronsError } = await supabase
+          .from("patrons")
+          .select("*")
+        
+        if (patronsError) console.error("Patrons fetch error:", patronsError)
+
+        console.log("📊 DASHBOARD DATA FETCH:")
+        console.log("Books count:", booksData?.length)
+        console.log("Loans count:", loansData?.length)
+        console.log("Patrons count:", patronsData?.length)
 
         // Dashboard stats
         const totalBooks = booksData?.length || 0
@@ -102,20 +114,34 @@ export default function DashboardPage() {
 
         const overdueBooksCount = overdueLoans.length
 
-        console.log("📊 Overdue Calculation Results:", {
-          totalLoans: loansData?.length,
-          overdueLoansCount: overdueLoans.length,
-          overdueLoanDetails: overdueLoans.map(loan => ({
-            id: loan.id,
-            doc_date: loan.doc_date,
-            created_at: loan.created_at,
-            status: loan.status,
-            returned_date: loan.returned_date,
-            book_title: loan.books?.title,
-            patron: loan.patrons?.full_name,
-            daysOverdue: getDaysOverdue(loan)
-          }))
-        })
+        console.log("📊 OVERDUE CALCULATION DETAILS:")
+        console.log("Total loans:", loansData?.length)
+        console.log("Overdue loans count:", overdueLoans.length)
+        console.log("Overdue loans details:", overdueLoans.map(loan => ({
+          id: loan.id,
+          status: loan.status,
+          returned_date: loan.returned_date,
+          doc_date: loan.doc_date,
+          created_at: loan.created_at,
+          book_title: loan.books?.title,
+          patron_name: loan.patrons?.full_name,
+          isOverdue: isOverdue(loan),
+          daysOverdue: getDaysOverdue(loan)
+        })))
+
+        // Debug: Check all active loans
+        const activeLoansDebug = loansData?.filter(loan => 
+          loan.status === "active" || loan.status === "borrowed" || (!loan.returned_date && loan.status !== "returned")
+        ) || []
+        
+        console.log("📊 ACTIVE LOANS DEBUG:", activeLoansDebug.map(loan => ({
+          id: loan.id,
+          status: loan.status,
+          returned_date: loan.returned_date,
+          doc_date: loan.doc_date,
+          book_title: loan.books?.title,
+          isOverdue: isOverdue(loan)
+        })))
 
         setDashboardStats({
           totalBooks,
@@ -126,24 +152,27 @@ export default function DashboardPage() {
           overdueBooks: overdueBooksCount,
         })
 
-        // ✅ FIXED: Recent activity - use loans data with patron info
-        const activeLoans = loansData?.filter(l => 
-          l.status === "active" || l.status === "borrowed" || (!l.returned_date && l.status !== "returned")
-        ) || []
+        // ✅ FIXED: Recent activity - use ALL loans including overdue
+        const recentLoans = loansData?.slice(0, 5) || []
         
-        const recentActivityWithBooks = activeLoans.slice(0, 5).map(loan => ({
-          ...loan,
-          title: loan.books?.title || "Unknown Book",
-          author: loan.books?.author || "Unknown Author",
-          borrowerName: loan.patrons?.full_name || "Unknown Borrower",
-        }))
+        const recentActivityWithBooks = recentLoans.map(loan => {
+          const isLoanOverdue = isOverdue(loan)
+          return {
+            ...loan,
+            title: loan.books?.title || "Unknown Book",
+            author: loan.books?.author || "Unknown Author",
+            borrowerName: loan.patrons?.full_name || "Unknown Borrower",
+            isOverdue: isLoanOverdue
+          }
+        })
 
         setRecentActivity(recentActivityWithBooks)
 
         // Popular books - count checkouts from loans
         const checkoutCounts: Record<string, number> = {}
         loansData?.forEach(loan => {
-          if (loan.status === "active" || loan.status === "returned" || loan.status === "borrowed") {
+          // Count all loans except cancelled ones
+          if (loan.status !== "cancelled") {
             const bookId = loan.book_id
             if (bookId) {
               checkoutCounts[bookId] = (checkoutCounts[bookId] || 0) + 1
@@ -181,7 +210,7 @@ export default function DashboardPage() {
               title: book.title,
               author: book.author,
               borrower: loan.patrons?.full_name || "Unknown",
-              dueDate: loan.doc_date || new Date(loan.created_at).toISOString().split("T")[0],
+              dueDate: loan.doc_date || loan.created_at,
               daysOverdue,
               loanId: loan.id,
               patronId: loan.patron_id
@@ -189,7 +218,7 @@ export default function DashboardPage() {
           })
           .filter(Boolean)
 
-        console.log("📊 Overdue Books for Display:", overdueBooksList)
+        console.log("📊 OVERDUE BOOKS FOR DISPLAY:", overdueBooksList)
         setOverdueBooks(overdueBooksList)
 
       } catch (err) {
@@ -227,17 +256,25 @@ export default function DashboardPage() {
                 </h1>
                 <p className="text-muted-foreground">Library inventory overview and statistics</p>
               </div>
-              <Link href="/books/add">
-                <Button className={cn(
-                  "bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700",
-                  "text-white shadow-lg shadow-indigo-500/25 hover:shadow-indigo-500/40",
-                  "transition-all duration-300 transform hover:scale-[1.02]",
-                  "border-0 backdrop-blur-sm"
-                )}>
-                  <Plus className="mr-2 h-4 w-4" />
-                  Add Book
-                </Button>
-              </Link>
+              <div className="flex gap-2">
+                <Link href="/books/add">
+                  <Button className={cn(
+                    "bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700",
+                    "text-white shadow-lg shadow-indigo-500/25 hover:shadow-indigo-500/40",
+                    "transition-all duration-300 transform hover:scale-[1.02]",
+                    "border-0 backdrop-blur-sm"
+                  )}>
+                    <Plus className="mr-2 h-4 w-4" />
+                    Add Book
+                  </Button>
+                </Link>
+                <Link href="/transactions">
+                  <Button variant="outline" className="backdrop-blur-sm border-border/50">
+                    <Eye className="mr-2 h-4 w-4" />
+                    View Transactions
+                  </Button>
+                </Link>
+              </div>
             </div>
 
             {/* Stats Cards */}
@@ -294,15 +331,33 @@ export default function DashboardPage() {
                 </CardContent>
               </Card>
 
-              <Card className="backdrop-blur-xl border-border/30 bg-gradient-to-b from-background/95 to-background/90 shadow-lg shadow-indigo-500/10">
+              <Card className={cn(
+                "backdrop-blur-xl border-border/30 bg-gradient-to-b from-background/95 to-background/90 shadow-lg",
+                dashboardStats.overdueBooks > 0 
+                  ? "border-red-200/50 shadow-red-500/10" 
+                  : "shadow-indigo-500/10"
+              )}>
                 <CardHeader className="flex flex-row items-center justify-between pb-2">
                   <CardTitle className="text-sm font-medium text-foreground/80">Overdue</CardTitle>
-                  <div className="p-2 rounded-lg bg-gradient-to-tr from-red-500/20 to-orange-500/20">
-                    <Clock className="h-4 w-4 text-red-600" />
+                  <div className={cn(
+                    "p-2 rounded-lg",
+                    dashboardStats.overdueBooks > 0
+                      ? "bg-gradient-to-tr from-red-500/20 to-orange-500/20"
+                      : "bg-gradient-to-tr from-green-500/20 to-emerald-500/20"
+                  )}>
+                    <Clock className={cn(
+                      "h-4 w-4",
+                      dashboardStats.overdueBooks > 0 ? "text-red-600" : "text-green-600"
+                    )} />
                   </div>
                 </CardHeader>
                 <CardContent>
-                  <div className="text-2xl font-bold text-destructive">{dashboardStats.overdueBooks}</div>
+                  <div className={cn(
+                    "text-2xl font-bold",
+                    dashboardStats.overdueBooks > 0 ? "text-destructive" : "text-foreground"
+                  )}>
+                    {dashboardStats.overdueBooks}
+                  </div>
                   <p className="text-xs text-muted-foreground">
                     {dashboardStats.overdueBooks > 0 ? "Requires attention" : "All clear!"}
                   </p>
@@ -357,15 +412,18 @@ export default function DashboardPage() {
                           <div
                             className={cn(
                               "w-2 h-2 rounded-full transition-all",
-                              activity.status === "active" || activity.status === "borrowed"
+                              activity.isOverdue
+                                ? "bg-gradient-to-r from-red-500 to-orange-500"
+                                : activity.status === "active" || activity.status === "borrowed"
                                 ? "bg-gradient-to-r from-blue-500 to-cyan-500" 
-                                : "bg-gradient-to-r from-red-500 to-orange-500"
+                                : "bg-gradient-to-r from-green-500 to-emerald-500"
                             )}
                           />
                           <div>
                             <p className="text-sm font-medium">{activity.title}</p>
                             <p className="text-xs text-muted-foreground">
-                              Loan by {activity.borrowerName}
+                              {activity.isOverdue ? "OVERDUE • " : ""}
+                              {activity.status} by {activity.borrowerName}
                             </p>
                           </div>
                         </div>
@@ -424,7 +482,7 @@ export default function DashboardPage() {
                           </div>
                         </div>
                         <Badge variant="secondary" className="backdrop-blur-sm bg-muted/50">
-                          {book.checkouts} checkouts
+                          {book.checkouts} checkout{book.checkouts !== 1 ? 's' : ''}
                         </Badge>
                       </div>
                     ))}
@@ -441,11 +499,11 @@ export default function DashboardPage() {
               <Card className="backdrop-blur-xl border-destructive/50 bg-gradient-to-b from-destructive/5 to-destructive/10 shadow-lg shadow-red-500/10">
                 <CardHeader>
                   <CardTitle className="text-destructive flex items-center gap-2">
-                    <Clock className="h-5 w-5" />
-                    Overdue Books
+                    <AlertTriangle className="h-5 w-5" />
+                    Overdue Books - Requires Attention!
                   </CardTitle>
                   <CardDescription>
-                    {overdueBooks.length} book{overdueBooks.length !== 1 ? 's' : ''} that need to be returned
+                    {overdueBooks.length} book{overdueBooks.length !== 1 ? 's' : ''} that need to be returned immediately
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
