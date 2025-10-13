@@ -377,6 +377,9 @@ export default function TransactionsPage() {
       return
     }
 
+    // Show a loading toast while sending
+    const loadingToast = toast.loading(`Sending reminder to ${borrowerName}...`)
+
     // ✅ Send the email via EmailJS
     const response = await emailjs.send(
       "service_1lboc1u",       // Your EmailJS Service ID
@@ -392,8 +395,14 @@ export default function TransactionsPage() {
       "VciD--jXYRWjpdqNe"      // Your EmailJS Public Key
     )
 
+    // Dismiss the loading toast
+    toast.dismiss(loadingToast)
+
     if (response.status === 200) {
-      toast.success(`Reminder sent to ${borrowerName} 📧`)
+      // ✅ Success toast when message is sent
+      toast.success(`Overdue reminder successfully sent to ${borrowerName} 📧`, {
+        description: `Email sent to ${borrowerEmail}`,
+      })
     } else {
       toast.error("Failed to send reminder. Please try again.")
     }
