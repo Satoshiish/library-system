@@ -76,7 +76,7 @@ export default function LoginPage() {
         <CardHeader className="text-center pb-6">
           <div className="flex justify-center mb-4">
             <div className="bg-gradient-to-tr from-indigo-500 to-purple-500 p-3 rounded-2xl shadow-lg">
-              <BookOpen className="h-8 w-8 text-white" />
+              <BookOpen className="h-8 w-8 text-white" strokeWidth={2} />
             </div>
           </div>
           <CardTitle className="text-2xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">
@@ -94,7 +94,7 @@ export default function LoginPage() {
                 Email
               </Label>
               <div className="relative">
-                <User className="absolute left-3 top-3 h-4 w-4 text-indigo-500" strokeWidth={2} />
+                <User className="absolute left-3 top-3 h-5 w-5 text-indigo-600" strokeWidth={2} />
                 <Input
                   id="email"
                   type="email"
@@ -102,7 +102,7 @@ export default function LoginPage() {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   required
-                  className="pl-10 backdrop-blur-sm bg-background/50 border-border/50 focus:border-indigo-300 transition-colors"
+                  className="pl-11 backdrop-blur-sm bg-background/50 border-border/50 focus:border-indigo-300 transition-colors h-11"
                 />
               </div>
             </div>
@@ -112,7 +112,7 @@ export default function LoginPage() {
                 Password
               </Label>
               <div className="relative">
-                <Shield className="absolute left-3 top-3 h-4 w-4 text-indigo-500" strokeWidth={2} />
+                <Shield className="absolute left-3 top-3 h-5 w-5 text-indigo-600" strokeWidth={2} />
                 <Input
                   id="password"
                   type="password"
@@ -120,7 +120,7 @@ export default function LoginPage() {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   required
-                  className="pl-10 backdrop-blur-sm bg-background/50 border-border/50 focus:border-indigo-300 transition-colors"
+                  className="pl-11 backdrop-blur-sm bg-background/50 border-border/50 focus:border-indigo-300 transition-colors h-11"
                 />
               </div>
             </div>
@@ -128,7 +128,7 @@ export default function LoginPage() {
             {error && (
               <Alert variant="destructive" className="backdrop-blur-sm border-border/50">
                 <AlertDescription className="flex items-center">
-                  <Lock className="h-4 w-4 mr-2" />
+                  <Lock className="h-4 w-4 mr-2 text-destructive" />
                   {error}
                 </AlertDescription>
               </Alert>
@@ -140,7 +140,7 @@ export default function LoginPage() {
                 "w-full bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700",
                 "text-white shadow-lg shadow-indigo-500/25 hover:shadow-indigo-500/40",
                 "transition-all duration-300 transform hover:scale-[1.02]",
-                "border-0 backdrop-blur-sm"
+                "border-0 backdrop-blur-sm h-11"
               )} 
               disabled={isLoading}
             >
@@ -151,7 +151,7 @@ export default function LoginPage() {
                 </div>
               ) : (
                 <div className="flex items-center justify-center">
-                  <Lock className="mr-2 h-4 w-4" />
+                  <Lock className="mr-2 h-4 w-4 text-white" />
                   Sign In
                 </div>
               )}
