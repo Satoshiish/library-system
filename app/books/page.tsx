@@ -131,7 +131,13 @@ export default function BooksPage() {
     fetchBooks()
   }, [searchTerm, statusFilter, categoryFilter])
 
-  const categories = Array.from(new Set(books.map((book) => book.category)))
+  // ✅ FIXED: Handle empty/null categories properly
+  const categories = Array.from(new Set(
+    books
+      .map((book) => book.category)
+      .filter(category => category && category.trim() !== "") // Remove empty/null categories
+      .map(category => category.trim()) // Trim whitespace
+  )).sort() // Sort alphabetically
 
   // Open delete modal
   const confirmDelete = (book: any) => {
@@ -245,6 +251,8 @@ export default function BooksPage() {
                         <SelectItem value="reserved">Reserved</SelectItem>
                       </SelectContent>
                     </Select>
+                    
+                    {/* ✅ FIXED: Category filter with proper validation */}
                     <Select value={categoryFilter} onValueChange={setCategoryFilter}>
                       <SelectTrigger>
                         <SelectValue placeholder="Filter by category" />
@@ -252,8 +260,13 @@ export default function BooksPage() {
                       <SelectContent>
                         <SelectItem value="all">All Categories</SelectItem>
                         {categories.map((category) => (
-                          <SelectItem key={category} value={category}>
-                            {category}
+                          <SelectItem 
+                            key={category} 
+                            value={category}
+                            // Ensure the value is never empty
+                            disabled={!category || category.trim() === ""}
+                          >
+                            {category || "Uncategorized"}
                           </SelectItem>
                         ))}
                       </SelectContent>
@@ -315,7 +328,7 @@ export default function BooksPage() {
                               </div>
                               <div className="flex items-center gap-2">
                                 <span className="text-muted-foreground">Category:</span>
-                                <span>{book.category}</span>
+                                <span>{book.category || "Uncategorized"}</span>
                               </div>
                               <div className="flex items-center gap-2">
                                 <Calendar className="h-3 w-3 text-muted-foreground flex-shrink-0" />
@@ -394,7 +407,7 @@ export default function BooksPage() {
               <div className="space-y-2 text-sm">
                 <p><strong>Author:</strong> {viewingBook.author}</p>
                 <p><strong>ISBN:</strong> {viewingBook.isbn}</p>
-                <p><strong>Category:</strong> {viewingBook.category}</p>
+                <p><strong>Category:</strong> {viewingBook.category || "Uncategorized"}</p>
                 <p><strong>Status:</strong> {viewingBook.status.replace("_", " ").toUpperCase()}</p>
                 <p><strong>Added:</strong> {new Date(viewingBook.created_at).toLocaleDateString()}</p>
                 <p>
