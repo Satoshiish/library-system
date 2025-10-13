@@ -76,7 +76,7 @@ export default function LoginPage() {
         <CardHeader className="text-center pb-6">
           <div className="flex justify-center mb-4">
             <div className="bg-gradient-to-tr from-indigo-500 to-purple-500 p-3 rounded-2xl shadow-lg">
-              <BookOpen className="h-8 w-8 text-white" strokeWidth={2} />
+              <BookOpen className="h-8 w-8 text-white" />
             </div>
           </div>
           <CardTitle className="text-2xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">
@@ -90,11 +90,13 @@ export default function LoginPage() {
         <CardContent className="pb-6">
           <form onSubmit={handleLogin} className="space-y-5">
             <div className="space-y-3">
-              <Label htmlFor="email" className="text-sm font-medium text-foreground/80">
+              <Label htmlFor="email" className="text-sm font-medium text-foreground">
                 Email
               </Label>
               <div className="relative">
-                <User className="absolute left-3 top-3 h-5 w-5 text-indigo-600" strokeWidth={2} />
+                <div className="absolute left-3 top-1/2 transform -translate-y-1/2">
+                  <User className="h-5 w-5 text-indigo-600" />
+                </div>
                 <Input
                   id="email"
                   type="email"
@@ -102,17 +104,19 @@ export default function LoginPage() {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   required
-                  className="pl-11 backdrop-blur-sm bg-background/50 border-border/50 focus:border-indigo-300 transition-colors h-11"
+                  className="pl-11 bg-background border-border focus:border-indigo-300 transition-colors h-11"
                 />
               </div>
             </div>
 
             <div className="space-y-3">
-              <Label htmlFor="password" className="text-sm font-medium text-foreground/80">
+              <Label htmlFor="password" className="text-sm font-medium text-foreground">
                 Password
               </Label>
               <div className="relative">
-                <Shield className="absolute left-3 top-3 h-5 w-5 text-indigo-600" strokeWidth={2} />
+                <div className="absolute left-3 top-1/2 transform -translate-y-1/2">
+                  <Shield className="h-5 w-5 text-indigo-600" />
+                </div>
                 <Input
                   id="password"
                   type="password"
@@ -120,15 +124,15 @@ export default function LoginPage() {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   required
-                  className="pl-11 backdrop-blur-sm bg-background/50 border-border/50 focus:border-indigo-300 transition-colors h-11"
+                  className="pl-11 bg-background border-border focus:border-indigo-300 transition-colors h-11"
                 />
               </div>
             </div>
             
             {error && (
-              <Alert variant="destructive" className="backdrop-blur-sm border-border/50">
+              <Alert variant="destructive" className="border-destructive">
                 <AlertDescription className="flex items-center">
-                  <Lock className="h-4 w-4 mr-2 text-destructive" />
+                  <Lock className="h-4 w-4 mr-2" />
                   {error}
                 </AlertDescription>
               </Alert>
@@ -140,7 +144,7 @@ export default function LoginPage() {
                 "w-full bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700",
                 "text-white shadow-lg shadow-indigo-500/25 hover:shadow-indigo-500/40",
                 "transition-all duration-300 transform hover:scale-[1.02]",
-                "border-0 backdrop-blur-sm h-11"
+                "border-0 h-11"
               )} 
               disabled={isLoading}
             >
@@ -151,14 +155,14 @@ export default function LoginPage() {
                 </div>
               ) : (
                 <div className="flex items-center justify-center">
-                  <Lock className="mr-2 h-4 w-4 text-white" />
+                  <Lock className="mr-2 h-4 w-4" />
                   Sign In
                 </div>
               )}
             </Button>
           </form>
           
-          <div className="mt-6 p-4 rounded-lg bg-muted/30 backdrop-blur-sm border border-border/30">
+          <div className="mt-6 p-4 rounded-lg bg-muted/30 border border-border">
             <div className="text-center text-sm text-muted-foreground">
               <p className="font-medium mb-1">Demo Credentials</p>
               <p>admin@library.com / admin123</p>
