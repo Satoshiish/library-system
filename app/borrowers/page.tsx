@@ -177,116 +177,135 @@ export default function BorrowersPage() {
   }
 
   useEffect(() => {
-    const fetchData = async () => {
-      setLoading(true)
-      try {
-        console.log("🔍 Starting borrower data fetch...")
+  const fetchData = async () => {
+    setLoading(true);
+    try {
+      console.log("🔍 Starting borrower & loan data fetch...");
 
-        // Fetch patrons, loans, and books in parallel
-        const [
-          { data: patronsData, error: patronsError },
-          { data: loansData, error: loansError },
-          { data: booksData, error: booksError },
-        ] = await Promise.all([
-          supabase
-            .from("patrons")
-            .select("*")
-            .order("member_since", { ascending: false }),
+      // Fetch patrons, loans, and books in parallel
+      const [
+        { data: patronsData, error: patronsError },
+        { data: loansData, error: loansError },
+        { data: booksData, error: booksError },
+      ] = await Promise.all([
+        supabase
+          .from("patrons")
+          .select("id, name, email, phone, status, member_since")
+          .order("member_since", { ascending: false }),
 
-          supabase
-            .from("loans")
-            .select(`
-              *,
-              patrons!loans_patron_id_fkey (
-                id,
-                name,
-                email,
-                phone,
-                status,
-                member_since
-              ),
-              books!loans_book_id_fkey (
-                id,
-                title,
-                author,
-                isbn,
-                author
-              )
-            `)
-            .order("created_at", { ascending: false }),
+        supabase
+          .from("loans")
+          .select(`
+            id,
+            status,
+            due_date,
+            returned_date,
+            created_at,
+            loan_date,
+            patron_id,
+            book_id,
+            patrons:patrons!loans_patron_id_fkey (
+              id,
+              name,
+              email,
+              phone,
+              status,
+              member_since
+            ),
+            books:books!loans_book_id_fkey (
+              id,
+              title,
+              author,
+              isbn
+            )
+          `)
+          .order("created_at", { ascending: false }),
 
-          supabase
-            .from("books")
-            .select("id, title, isbn, author")
-            .order("title"),
-        ])
+        supabase
+          .from("books")
+          .select("id, title, isbn, author")
+          .order("title"),
+      ]);
 
-        // Handle PATRONS
-        if (patronsError) {
-          console.error("❌ Patrons error:", patronsError)
-          setBorrowers([])
-        } else {
-          const formattedPatrons = (patronsData || []).map(patron => ({
-            ...patron,
-            status: patron.status === "archived" ? "inactive" : patron.status
-          }))
-          setBorrowers(formattedPatrons)
-        }
-
-        // Handle BOOKS
-        if (booksError) {
-          console.error("❌ Books error:", booksError)
-          setBooks([])
-        } else {
-          setBooks(booksData || [])
-        }
-
-        // Handle LOANS with fallback logic
-        if (loansError) {
-          console.error("❌ Loans join error:", loansError)
-          
-          // Fallback: try simple query if join fails
-          const { data: simpleLoans } = await supabase
-            .from("loans")
-            .select("*")
-            .order("created_at", { ascending: false })
-          
-          if (simpleLoans) {
-            // Manually link data if joins fail
-            const formattedLoans: Loan[] = simpleLoans.map(loan => {
-              const patron = patronsData?.find(p => p.id === loan.patron_id)
-              const book = booksData?.find(b => b.id === loan.book_id)
-              
-              return {
-                id: loan.id,
-                status: loan.status,
-                due_date: loan.due_date,
-                loan_date: loan.loan_date,
-                created_at: loan.created_at,
-                returned_date: loan.returned_date,
-                patron_id: loan.patron_id,
-                book_id: loan.book_id,
-                patrons: patron || undefined,
-                books: book || undefined
-              }
-            })
-            setLoans(formattedLoans)
-          } else {
-            setLoans([])
-          }
-        } else {
-          // Use the joined data directly
-          setLoans(loansData || [])
-        }
-
-      } catch (error) {
-        console.error("❌ Unexpected error:", error)
-      } finally {
-        setLoading(false)
+      // 🧭 Handle PATRONS
+      if (patronsError) {
+        console.error("❌ Patrons error:", patronsError);
+        setBorrowers([]);
+      } else {
+        const formattedPatrons = (patronsData || []).map((patron) => ({
+          ...patron,
+          status: patron.status === "archived" ? "inactive" : patron.status,
+        }));
+        setBorrowers(formattedPatrons);
       }
+
+      // 📚 Handle BOOKS
+      if (booksError) {
+        console.error("❌ Books error:", booksError);
+        setBooks([]);
+      } else {
+        setBooks(booksData || []);
+      }
+
+      // 💳 Handle LOANS (with fallback logic)
+      if (loansError) {
+        console.error("❌ Loans join error:", loansError);
+
+        // Fallback query if join fails
+        const { data: simpleLoans, error: simpleError } = await supabase
+          .from("loans")
+          .select("*")
+          .order("created_at", { ascending: false });
+
+        if (simpleError) {
+          console.error("❌ Simple loans error:", simpleError);
+          setLoans([]);
+        } else if (simpleLoans) {
+          // Manually link patrons & books
+          const formattedLoans = simpleLoans.map((loan) => {
+            const patron = patronsData?.find((p) => p.id === loan.patron_id);
+            const book = booksData?.find((b) => b.id === loan.book_id);
+
+            return {
+              ...loan,
+              borrower_name: patron?.name || `Patron #${loan.patron_id}`,
+              book_title: book?.title || `Book #${loan.book_id}`,
+              patrons: patron || undefined,
+              books: book || undefined,
+            };
+          });
+
+          console.log("✅ Loans (manually linked):", formattedLoans);
+          setLoans(formattedLoans);
+        } else {
+          setLoans([]);
+        }
+      } else {
+        // Use joined data
+        const enhancedLoans = (loansData || []).map((loan) => ({
+          ...loan,
+          borrower_name:
+            loan.patrons?.name ||
+            patronsData?.find((p) => p.id === loan.patron_id)?.name ||
+            `Patron #${loan.patron_id}`,
+          book_title:
+            loan.books?.title ||
+            booksData?.find((b) => b.id === loan.book_id)?.title ||
+            `Book #${loan.book_id}`,
+        }));
+
+        console.log("✅ Loans (joined):", enhancedLoans);
+        setLoans(enhancedLoans);
+      }
+    } catch (error) {
+      console.error("❌ Unexpected error:", error);
+    } finally {
+      setLoading(false);
     }
-    fetchData()
-  }, [])
+  };
+
+  fetchData();
+}, []);
 
   // Use enhanced loans for display
   const enhancedLoans = getEnhancedLoans()
