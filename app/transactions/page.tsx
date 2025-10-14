@@ -35,6 +35,7 @@ interface Transaction {
     title: string
     author: string
     isbn: string
+    status: string
   }
 }
 
@@ -148,7 +149,9 @@ export default function TransactionsPage() {
           console.error("❌ Books error:", booksError);
           setBooks([]);
         } else {
-          setBooks(booksData || []);
+          // Only show available books for new transactions
+          const availableBooks = (booksData || []).filter(book => book.status === "available");
+          setBooks(availableBooks);
         }
       } catch (error) {
         console.error("❌ Unexpected error:", error);
@@ -317,10 +320,16 @@ export default function TransactionsPage() {
     }
   }
 
-  // Mark transaction as returned
+  // Mark transaction as returned with book status update
   const markAsReturned = async (loanId: string) => {
     try {
       const now = new Date().toISOString()
+      const transaction = transactions.find(t => t.id === loanId)
+
+      if (!transaction) {
+        toast.error("Transaction not found")
+        return
+      }
 
       const { error: loanUpdateError } = await supabase
         .from("loans")
@@ -332,6 +341,15 @@ export default function TransactionsPage() {
 
       if (loanUpdateError) throw loanUpdateError
 
+      // Update book status back to "available"
+      const { error: bookUpdateError } = await supabase
+        .from("books")
+        .update({ status: "available" })
+        .eq("id", transaction.book_id)
+
+      if (bookUpdateError) throw bookUpdateError
+
+      // Update local state
       setTransactions(prev =>
         prev.map(t => t.id === loanId ? { 
           ...t, 
@@ -340,9 +358,10 @@ export default function TransactionsPage() {
         } : t)
       )
 
+      // Refresh available books list
       const { data: refreshedBooks } = await supabase
         .from("books")
-        .select("id, title, author")
+        .select("id, title, author, status")
         .eq("status", "available")
       setBooks(refreshedBooks || [])
 
@@ -397,7 +416,7 @@ export default function TransactionsPage() {
     }
   }
 
-  // Add new transaction
+  // Add new transaction with book status validation
   const handleAddTransaction = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!newLoan.patron_id || !newLoan.book_id || !newLoan.due_date) {
@@ -407,6 +426,20 @@ export default function TransactionsPage() {
 
     setSubmitting(true)
     try {
+      // Check if the selected book is available
+      const selectedBook = books.find(book => book.id === newLoan.book_id);
+      
+      if (!selectedBook) {
+        toast.error("Selected book not found");
+        return;
+      }
+
+      if (selectedBook.status !== "available") {
+        toast.error(`This book is currently ${selectedBook.status}. Please select an available book.`);
+        return;
+      }
+
+      // Create the loan transaction
       const { error: loanError, data: loanData } = await supabase
         .from("loans")
         .insert({
@@ -421,17 +454,21 @@ export default function TransactionsPage() {
 
       if (loanError) throw loanError
 
-      await supabase
+      // Update book status to "borrowed"
+      const { error: bookUpdateError } = await supabase
         .from("books")
         .update({ status: "borrowed" })
         .eq("id", newLoan.book_id)
 
+      if (bookUpdateError) throw bookUpdateError
+
+      // Refresh transactions data
       const { data: refreshedLoans, error: refreshError } = await supabase
         .from("loans")
         .select(`
           *,
           borrowers!loans_patron_id_fkey ( id, name, email ),
-          books!loans_book_id_fkey ( id, title, author, isbn )
+          books!loans_book_id_fkey ( id, title, author, isbn, status )
         `)
         .order("created_at", { ascending: false })
 
@@ -441,11 +478,12 @@ export default function TransactionsPage() {
         setTransactions(prev => [loanData, ...prev])
       }
 
+      // Reset form and refresh available books
       setNewLoan({ patron_id: "", book_id: "", due_date: "" })
 
       const { data: refreshedBooks } = await supabase
         .from("books")
-        .select("id, title, author")
+        .select("id, title, author, status")
         .eq("status", "available")
       setBooks(refreshedBooks || [])
 
@@ -676,7 +714,7 @@ export default function TransactionsPage() {
                     <CardTitle className="bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">
                       Add New Transaction
                     </CardTitle>
-                    <CardDescription>Create a new book loan transaction</CardDescription>
+                    <CardDescription>Create a new book loan transaction. Only available books are shown.</CardDescription>
                   </CardHeader>
                   <CardContent>
                     <form onSubmit={handleAddTransaction} className="space-y-4">
@@ -717,6 +755,9 @@ export default function TransactionsPage() {
                               ))}
                             </SelectContent>
                           </Select>
+                          <p className="text-xs text-muted-foreground">
+                            Showing {books.length} available book{books.length !== 1 ? 's' : ''}
+                          </p>
                         </div>
 
                         <div className="space-y-3">
