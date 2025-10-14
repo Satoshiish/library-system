@@ -71,18 +71,21 @@ interface Loan {
   created_at: string
   patron_id: string
   book_id: string
-  patron: {
+  patrons?: {
     id: string
-    name: string
+    full_name: string
     email: string
+    phone?: string
     status: string
+    member_since: string
   }
-  book: Book
+  books?: Book
 }
 
 export default function BorrowersPage() {
   const [borrowers, setBorrowers] = useState<Patron[]>([])
   const [loans, setLoans] = useState<Loan[]>([])
+  const [books, setBooks] = useState<Book[]>([])
   const [searchTerm, setSearchTerm] = useState("")
   const [statusFilter, setStatusFilter] = useState("all")
   const [activeTab, setActiveTab] = useState("borrowers")
@@ -127,45 +130,119 @@ export default function BorrowersPage() {
     })
   }
 
+  // Enhanced function to get patron name with multiple fallbacks
+  const getPatronName = (loan: Loan) => {
+    if (loan.patrons?.full_name) {
+      return loan.patrons.full_name
+    }
+    
+    const patron = borrowers.find(p => p.id === loan.patron_id)
+    if (patron?.full_name) {
+      return patron.full_name
+    }
+    
+    return `Patron #${loan.patron_id?.substring(0, 8)}...`
+  }
+
+  // Enhanced function to get book title with multiple fallbacks
+  const getBookTitle = (loan: Loan) => {
+    if (loan.books?.title) {
+      return loan.books.title
+    }
+    
+    const book = books.find(b => b.id === loan.book_id)
+    if (book?.title) {
+      return book.title
+    }
+    
+    return `Book #${loan.book_id?.substring(0, 8)}...`
+  }
+
+  // Function to manually link data when joins fail
+  const getEnhancedLoans = () => {
+    return loans.map(loan => {
+      if (loan.patrons && loan.books) {
+        return loan
+      }
+
+      const patron = borrowers.find(p => p.id === loan.patron_id)
+      const book = books.find(b => b.id === loan.book_id)
+      
+      return {
+        ...loan,
+        patrons: patron || undefined,
+        books: book || undefined
+      }
+    })
+  }
+
   useEffect(() => {
     const fetchData = async () => {
       setLoading(true)
       try {
-        // Fetch patrons (using your existing patrons table)
-        const { data: patronsData, error: patronsError } = await supabase
-          .from("patrons")
-          .select("*")
-          .order("member_since", { ascending: false })
+        console.log("🔍 Starting borrower data fetch...")
 
+        // Fetch patrons, loans, and books in parallel
+        const [
+          { data: patronsData, error: patronsError },
+          { data: loansData, error: loansError },
+          { data: booksData, error: booksError },
+        ] = await Promise.all([
+          supabase
+            .from("patrons")
+            .select("*")
+            .order("member_since", { ascending: false }),
+
+          supabase
+            .from("loans")
+            .select(`
+              *,
+              patrons!loans_patron_id_fkey (
+                id,
+                full_name,
+                email,
+                phone,
+                status,
+                member_since
+              ),
+              books!loans_book_id_fkey (
+                id,
+                title,
+                isbn,
+                author
+              )
+            `)
+            .order("created_at", { ascending: false }),
+
+          supabase
+            .from("books")
+            .select("id, title, isbn, author")
+            .order("title"),
+        ])
+
+        // Handle PATRONS
         if (patronsError) {
-          console.error("Error fetching patrons:", patronsError)
-          return
+          console.error("❌ Patrons error:", patronsError)
+          setBorrowers([])
+        } else {
+          const formattedPatrons = (patronsData || []).map(patron => ({
+            ...patron,
+            status: patron.status === "archived" ? "inactive" : patron.status
+          }))
+          setBorrowers(formattedPatrons)
         }
 
-        // Fetch loans with proper joins - matching transaction structure
-        const { data: loansData, error: loansError } = await supabase
-          .from("loans")
-          .select(`
-            *,
-            patrons!loans_patron_id_fkey (
-              id,
-              full_name,
-              email,
-              phone,
-              status,
-              member_since
-            ),
-            books!loans_book_id_fkey (
-              id,
-              title,
-              isbn,
-              author
-            )
-          `)
-          .order("created_at", { ascending: false })
+        // Handle BOOKS
+        if (booksError) {
+          console.error("❌ Books error:", booksError)
+          setBooks([])
+        } else {
+          setBooks(booksData || [])
+        }
 
+        // Handle LOANS with fallback logic
         if (loansError) {
-          console.error("Error fetching loans:", loansError)
+          console.error("❌ Loans join error:", loansError)
           
           // Fallback: try simple query if join fails
           const { data: simpleLoans } = await supabase
@@ -175,12 +252,9 @@ export default function BorrowersPage() {
           
           if (simpleLoans) {
             // Manually link data if joins fail
-            const { data: allBooks } = await supabase.from("books").select("*")
-            const { data: allPatrons } = await supabase.from("patrons").select("*")
-            
             const formattedLoans: Loan[] = simpleLoans.map(loan => {
-              const patron = allPatrons?.find(p => p.id === loan.patron_id)
-              const book = allBooks?.find(b => b.id === loan.book_id)
+              const patron = patronsData?.find(p => p.id === loan.patron_id)
+              const book = booksData?.find(b => b.id === loan.book_id)
               
               return {
                 id: loan.id,
@@ -191,55 +265,30 @@ export default function BorrowersPage() {
                 returned_date: loan.returned_date,
                 patron_id: loan.patron_id,
                 book_id: loan.book_id,
-                patron: patron ? {
-                  id: patron.id,
-                  name: patron.full_name,
-                  email: patron.email,
-                  status: patron.status,
-                } : { id: "", name: "Unknown Patron", email: "Unknown", status: "unknown" },
-                book: book || { id: "", title: "Unknown Book" },
+                patrons: patron || undefined,
+                books: book || undefined
               }
             })
             setLoans(formattedLoans)
+          } else {
+            setLoans([])
           }
         } else {
-          // Format loans data with proper typing
-          const formattedLoans: Loan[] = (loansData || []).map(loan => ({
-            id: loan.id,
-            status: loan.status,
-            due_date: loan.due_date,
-            loan_date: loan.loan_date,
-            created_at: loan.created_at,
-            returned_date: loan.returned_date,
-            patron_id: loan.patron_id,
-            book_id: loan.book_id,
-            patron: loan.patrons ? {
-              id: loan.patrons.id,
-              name: loan.patrons.full_name,
-              email: loan.patrons.email,
-              status: loan.patrons.status,
-            } : { id: "", name: "Unknown Patron", email: "Unknown", status: "unknown" },
-            book: loan.books || { id: "", title: "Unknown Book" },
-          }))
-          setLoans(formattedLoans)
+          // Use the joined data directly
+          setLoans(loansData || [])
         }
 
-        // Format patrons data
-        const formattedPatrons = (patronsData || []).map(patron => ({
-          ...patron,
-          status: patron.status === "archived" ? "inactive" : patron.status
-        }))
-
-        setBorrowers(formattedPatrons)
-
       } catch (error) {
-        console.error("Failed to fetch data:", error)
+        console.error("❌ Unexpected error:", error)
       } finally {
         setLoading(false)
       }
     }
     fetchData()
   }, [])
+
+  // Use enhanced loans for display
+  const enhancedLoans = getEnhancedLoans()
 
   // Filter borrowers based on search term and status
   const filteredBorrowers = borrowers.filter(b => {
@@ -252,21 +301,21 @@ export default function BorrowersPage() {
   })
 
   // Get active loans (not returned) - matching transaction logic
-  const activeLoans = loans.filter(loan => 
+  const activeLoans = enhancedLoans.filter(loan => 
     loan.status !== "returned" && !loan.returned_date
   )
 
   // Get overdue loans - matching transaction logic
-  const overdueLoans = loans.filter(loan => isOverdue(loan))
+  const overdueLoans = enhancedLoans.filter(loan => isOverdue(loan))
 
   // Get returned loans (loan history)
-  const returnedLoans = loans.filter(loan => 
+  const returnedLoans = enhancedLoans.filter(loan => 
     loan.status === "returned" || loan.returned_date
   )
 
   // Get loans by patron
   const getLoansByPatron = (patronId: string) => {
-    return loans.filter(loan => loan.patron_id === patronId)
+    return enhancedLoans.filter(loan => loan.patron_id === patronId)
   }
 
   // Get active loans by patron
@@ -476,7 +525,7 @@ export default function BorrowersPage() {
                                       )}
                                     >
                                       <div className="flex-1">
-                                        <p className="font-medium text-sm">{loan.book?.title || "Unknown Book"}</p>
+                                        <p className="font-medium text-sm">{getBookTitle(loan)}</p>
                                         <p className="text-xs text-muted-foreground">
                                           Borrowed: {formatDate(loan.loan_date)} • 
                                           Due: {loan.due_date ? formatDate(loan.due_date) : "Not set"}
@@ -524,7 +573,7 @@ export default function BorrowersPage() {
                                       className="flex items-center justify-between p-3 rounded-lg backdrop-blur-sm border border-green-200/50 bg-green-50/50"
                                     >
                                       <div className="flex-1">
-                                        <p className="font-medium text-sm">{loan.book?.title || "Unknown Book"}</p>
+                                        <p className="font-medium text-sm">{getBookTitle(loan)}</p>
                                         <p className="text-xs text-muted-foreground">
                                           Borrowed: {formatDate(loan.loan_date)} • 
                                           Returned: {loan.returned_date ? formatDate(loan.returned_date) : "Unknown"}
@@ -657,7 +706,7 @@ export default function BorrowersPage() {
                                           : "bg-green-50/50 border border-green-200/50"
                                       )}
                                     >
-                                      <span className="truncate flex-1 text-xs">{loan.book?.title || "Unknown Book"}</span>
+                                      <span className="truncate flex-1 text-xs">{getBookTitle(loan)}</span>
                                       <Badge 
                                         variant="outline" 
                                         className={cn(
@@ -738,17 +787,17 @@ export default function BorrowersPage() {
                             </Badge>
                           </div>
                           <CardTitle className="text-lg text-foreground line-clamp-2">
-                            {loan.book?.title || "Unknown Book"}
+                            {getBookTitle(loan)}
                           </CardTitle>
                           <CardDescription className="line-clamp-1">
-                            Patron: {loan.patron?.name}
+                            Patron: {getPatronName(loan)}
                           </CardDescription>
                         </CardHeader>
                         <CardContent>
                           <div className="space-y-3 text-sm">
                             <div className="flex items-center gap-2">
                               <User className="h-4 w-4 text-indigo-600" />
-                              <span>{loan.patron?.name}</span>
+                              <span>{getPatronName(loan)}</span>
                             </div>
                             <div className="flex items-center gap-2">
                               <Calendar className="h-4 w-4 text-indigo-600" />
@@ -862,17 +911,17 @@ export default function BorrowersPage() {
                               </Badge>
                             </div>
                             <CardTitle className="text-lg text-foreground line-clamp-2">
-                              {loan.book?.title || "Unknown Book"}
+                              {getBookTitle(loan)}
                             </CardTitle>
                             <CardDescription className="line-clamp-1">
-                              Patron: {loan.patron?.name}
+                              Patron: {getPatronName(loan)}
                             </CardDescription>
                           </CardHeader>
                           <CardContent>
                             <div className="space-y-3 text-sm">
                               <div className="flex items-center gap-2">
                                 <User className="h-4 w-4 text-red-600" />
-                                <span>{loan.patron?.name}</span>
+                                <span>{getPatronName(loan)}</span>
                               </div>
                               <div className="flex items-center gap-2">
                                 <Calendar className="h-4 w-4 text-red-600" />
