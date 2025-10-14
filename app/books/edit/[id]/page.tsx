@@ -38,13 +38,12 @@ export default function EditBookPage() {
   // Fetch book data
   useEffect(() => {
     if (!bookId) return
-
     const fetchBook = async () => {
       setIsLoading(true)
       try {
         const { data, error } = await supabase.from("books").select("*").eq("id", bookId).single()
         if (error || !data) {
-          setError("Book not found")
+          setError("Book not found.")
         } else {
           setFormData({
             title: data.title,
@@ -55,12 +54,11 @@ export default function EditBookPage() {
           })
         }
       } catch {
-        setError("Failed to fetch book data")
+        setError("Failed to fetch book data.")
       } finally {
         setIsLoading(false)
       }
     }
-
     fetchBook()
   }, [bookId])
 
@@ -71,35 +69,73 @@ export default function EditBookPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!bookId) return
-    setIsLoading(true)
     setError("")
+    setIsLoading(true)
+
+    // Validate required fields
+    if (!formData.title || !formData.author || !formData.isbn || !formData.category) {
+      setError("Please fill in all required fields.")
+      setIsLoading(false)
+      return
+    }
+
+    // Validate ISBN format
+    const isbnPattern = /^(97(8|9))?\d{9}(\d|X)$/
+    if (!isbnPattern.test(formData.isbn.replace(/[-\s]/g, ""))) {
+      setError("Invalid ISBN format. Example: 978-0-123456-47-2")
+      setIsLoading(false)
+      return
+    }
 
     try {
-      const { error } = await supabase.from("books").update(formData).eq("id", bookId)
-      if (error) {
+      // Check for duplicate ISBN (exclude current book)
+      const { data: duplicate } = await supabase
+        .from("books")
+        .select("id")
+        .eq("isbn", formData.isbn)
+        .neq("id", bookId)
+        .maybeSingle()
+
+      if (duplicate) {
+        setError("Another book already uses this ISBN. Please use a unique one.")
+        setIsLoading(false)
+        return
+      }
+
+      // Update the book
+      const { error: updateError } = await supabase
+        .from("books")
+        .update(formData)
+        .eq("id", bookId)
+
+      if (updateError) {
         setError("Failed to update book. Please try again.")
       } else {
         router.push("/books")
       }
     } catch {
-      setError("Failed to update book. Please try again.")
+      setError("An unexpected error occurred. Please try again.")
     } finally {
       setIsLoading(false)
     }
   }
 
-  const handleDelete = async () => {
-    if (!bookId || !confirm("Are you sure you want to delete this book?")) return
+  // Soft Delete (Archive)
+  const handleArchive = async () => {
+    if (!bookId || !confirm("Are you sure you want to archive this book?")) return
     setIsLoading(true)
     try {
-      const { error } = await supabase.from("books").delete().eq("id", bookId)
+      const { error } = await supabase
+        .from("books")
+        .update({ status: "archived" })
+        .eq("id", bookId)
       if (error) {
-        setError("Failed to delete book. Please try again.")
+        setError("Failed to archive book. Please try again.")
       } else {
         router.push("/books")
       }
     } catch {
-      setError("Failed to delete book. Please try again.")
+      setError("Failed to archive book. Please try again.")
     } finally {
       setIsLoading(false)
     }
@@ -136,7 +172,7 @@ export default function EditBookPage() {
                 <CardTitle className="bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">
                   Book Details
                 </CardTitle>
-                <CardDescription>Update the information for this book</CardDescription>
+                <CardDescription>Modify the details for this book</CardDescription>
               </CardHeader>
               <CardContent>
                 <form onSubmit={handleSubmit} className="space-y-6">
@@ -200,13 +236,29 @@ export default function EditBookPage() {
                       </Label>
                       <div className="relative">
                         <Tag className="absolute left-3 top-3 h-4 w-4 text-indigo-600 z-10" />
-                        <Select value={formData.category} onValueChange={(value) => handleInputChange("category", value)}>
+                        <Select
+                          value={formData.category}
+                          onValueChange={(value) => handleInputChange("category", value)}
+                        >
                           <SelectTrigger className="pl-11 bg-background/50 border-border/50 focus:border-indigo-300 h-11">
                             <SelectValue placeholder="Select category" />
                           </SelectTrigger>
                           <SelectContent>
-                            {["Fiction","Non-Fiction","Science","History","Biography","Romance","Mystery","Fantasy","Dystopian","Children"].map((cat) => (
-                              <SelectItem key={cat} value={cat}>{cat}</SelectItem>
+                            {[
+                              "Fiction",
+                              "Non-Fiction",
+                              "Science",
+                              "History",
+                              "Biography",
+                              "Romance",
+                              "Mystery",
+                              "Fantasy",
+                              "Dystopian",
+                              "Children",
+                            ].map((cat) => (
+                              <SelectItem key={cat} value={cat}>
+                                {cat}
+                              </SelectItem>
                             ))}
                           </SelectContent>
                         </Select>
@@ -219,7 +271,10 @@ export default function EditBookPage() {
                     <Label htmlFor="status" className="text-sm font-medium text-foreground/80">
                       Status
                     </Label>
-                    <Select value={formData.status} onValueChange={(value) => handleInputChange("status", value)}>
+                    <Select
+                      value={formData.status}
+                      onValueChange={(value) => handleInputChange("status", value)}
+                    >
                       <SelectTrigger className="bg-background/50 border-border/50 focus:border-indigo-300 h-11">
                         <SelectValue />
                       </SelectTrigger>
@@ -231,6 +286,7 @@ export default function EditBookPage() {
                     </Select>
                   </div>
 
+                  {/* Error Alert */}
                   {error && (
                     <Alert variant="destructive" className="backdrop-blur-sm border-destructive/50">
                       <AlertDescription>{error}</AlertDescription>
@@ -239,8 +295,8 @@ export default function EditBookPage() {
 
                   {/* Actions */}
                   <div className="flex flex-col sm:flex-row gap-4 pt-4 border-t border-border/30">
-                    <Button 
-                      type="submit" 
+                    <Button
+                      type="submit"
                       disabled={isLoading}
                       className={cn(
                         "flex-1 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700",
@@ -261,20 +317,20 @@ export default function EditBookPage() {
                         </>
                       )}
                     </Button>
-                    <Button 
-                      type="button" 
-                      variant="destructive" 
-                      onClick={handleDelete} 
+                    <Button
+                      type="button"
+                      variant="destructive"
+                      onClick={handleArchive}
                       disabled={isLoading}
                       className="h-11 backdrop-blur-sm"
                     >
                       <Trash2 className="mr-2 h-4 w-4" />
-                      Delete
+                      Archive
                     </Button>
                     <Link href="/books" className="flex-1">
-                      <Button 
-                        type="button" 
-                        variant="outline" 
+                      <Button
+                        type="button"
+                        variant="outline"
                         className="w-full h-11 backdrop-blur-sm border-border/50 hover:bg-muted/30"
                       >
                         Cancel
