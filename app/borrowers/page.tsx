@@ -199,6 +199,7 @@ export default function BorrowersPage() {
               *,
               patrons!loans_patron_id_fkey (
                 id,
+                full_name,
                 name,
                 email,
                 phone,
@@ -266,9 +267,11 @@ export default function BorrowersPage() {
                 returned_date: loan.returned_date,
                 patron_id: loan.patron_id,
                 book_id: loan.book_id,
+                borrower_name: patron?.name || `Unknown Patron (${loan.patron_id})`,
+                book_title: book?.title || `Unknown Book (${loan.book_id})`,
                 patrons: patron || undefined,
-                books: book || undefined
-              }
+                books: book || undefined,
+              };
             })
             setLoans(formattedLoans)
           } else {
