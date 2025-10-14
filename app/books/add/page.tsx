@@ -34,111 +34,118 @@ export default function AddBookPage() {
     status: "available",
   })
 
-  // ✅ Load authenticated user from localStorage (your custom auth system)
+  // ✅ Load authenticated user
   useEffect(() => {
-    const loadUser = () => {
-      if (typeof window !== "undefined") {
-        const userId = localStorage.getItem("userId")
-        const userEmail = localStorage.getItem("userEmail")
-        const userName = localStorage.getItem("userName")
-        const userRole = localStorage.getItem("userRole")
+    if (typeof window !== "undefined") {
+      const userId = localStorage.getItem("userId")
+      const userEmail = localStorage.getItem("userEmail")
+      const userName = localStorage.getItem("userName")
+      const userRole = localStorage.getItem("userRole")
 
-        if (userId) {
-          setCurrentUser({
-            id: parseInt(userId),
-            email: userEmail,
-            name: userName,
-            role: userRole
-          })
-        } else {
-          console.warn("⚠️ No user found in localStorage")
-        }
+      if (userId) {
+        setCurrentUser({
+          id: parseInt(userId),
+          email: userEmail,
+          name: userName,
+          role: userRole,
+        })
       }
     }
-
-    loadUser()
   }, [])
 
   const handleInputChange = (field: string, value: string) => {
+    // ✅ Prevent invalid characters based on field type
+    if (field === "title" || field === "author") {
+      if (!/^[A-Za-zÀ-ÖØ-öø-ÿ\s.,'-]*$/.test(value)) return
+    }
+    if (field === "isbn") {
+      if (!/^[0-9\-]*$/.test(value)) return
+    }
+
     setFormData((prev) => ({ ...prev, [field]: value }))
+  }
+
+  const validateForm = () => {
+    if (!formData.title.trim() || !formData.author.trim() || !formData.isbn.trim() || !formData.category.trim()) {
+      setError("Please fill in all required fields.")
+      return false
+    }
+
+    if (!/^[A-Za-zÀ-ÖØ-öø-ÿ\s.,'-]+$/.test(formData.title)) {
+      setError("Title must contain only letters and valid punctuation.")
+      return false
+    }
+
+    if (!/^[A-Za-zÀ-ÖØ-öø-ÿ\s.,'-]+$/.test(formData.author)) {
+      setError("Author name must contain only letters and valid punctuation.")
+      return false
+    }
+
+    if (!/^[0-9\-]+$/.test(formData.isbn)) {
+      setError("ISBN must contain only numbers and hyphens.")
+      return false
+    }
+
+    if (formData.isbn.length < 10 || formData.isbn.length > 17) {
+      setError("ISBN should be between 10 to 17 characters long.")
+      return false
+    }
+
+    return true
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    setIsLoading(true)
     setError("")
+    if (!validateForm()) return
+    setIsLoading(true)
 
     try {
-      // ✅ Get current user from localStorage (fallback)
-      let userId = currentUser?.id
-      let userEmail = currentUser?.email
-
-      if (!userId && typeof window !== "undefined") {
-        userId = parseInt(localStorage.getItem("userId") || "0")
-        userEmail = localStorage.getItem("userEmail") || "Unknown"
-      }
-
-      if (!userId || userId === 0) {
+      const userId = currentUser?.id || parseInt(localStorage.getItem("userId") || "0")
+      if (!userId) {
         setError("User not authenticated. Please log in again.")
-        setIsLoading(false)
         return
       }
 
-      // ✅ Prepare book data with added_by field
-      const bookData = {
-        ...formData,
-        added_by: userId // This is crucial for tracking who added the book
+      // ✅ Check for duplicate ISBN before inserting
+      const { data: existingBook, error: isbnError } = await supabase
+        .from("books")
+        .select("isbn")
+        .eq("isbn", formData.isbn)
+        .maybeSingle()
+
+      if (isbnError) throw isbnError
+      if (existingBook) {
+        setError("A book with this ISBN already exists.")
+        return
       }
 
-      console.log("Adding book with data:", bookData)
-
-      // ✅ Insert the book with added_by field
+      // ✅ Insert book
+      const bookData = { ...formData, added_by: userId }
       const { data: newBook, error: bookError } = await supabase
         .from("books")
         .insert([bookData])
         .select()
         .single()
 
-      if (bookError) {
-        console.error("❌ Book insert error:", bookError)
-        setError(`Failed to add book: ${bookError.message}`)
-        return
-      }
+      if (bookError) throw bookError
 
-      console.log("✅ Book added successfully:", newBook)
-
-      // ✅ Optional: Create audit log entry
-      try {
-        const logEntry = {
-          action: 'CREATE_BOOK',
-          table_name: 'books',
+      // ✅ Audit log
+      await supabase.from("audit_logs").insert([
+        {
+          action: "CREATE_BOOK",
+          table_name: "books",
           record_id: newBook.id,
           user_id: userId,
-          old_data: null,
           new_data: newBook,
-          created_at: new Date().toISOString()
-        }
+          created_at: new Date().toISOString(),
+        },
+      ])
 
-        const { error: logError } = await supabase
-          .from("audit_logs")
-          .insert([logEntry])
-
-        if (logError) {
-          console.error("❌ Audit log insert error:", logError)
-        } else {
-          console.log("✅ Audit log recorded")
-        }
-      } catch (logError) {
-        console.error("❌ Audit log failed:", logError)
-        // Don't fail the whole operation if audit logging fails
-      }
-
-      // ✅ Redirect after success
       router.push("/books")
-      
-    } catch (err) {
-      console.error("❌ Unexpected error:", err)
-      setError("Failed to add book. Please try again.")
+    } catch (err: any) {
+      console.error("❌ Error adding book:", err)
+      setError(err.message || "Failed to add book. Please try again.")
     } finally {
       setIsLoading(false)
     }
@@ -150,14 +157,9 @@ export default function AddBookPage() {
         <Sidebar />
         <main className="flex-1 lg:ml-64 p-6">
           <div className="max-w-2xl mx-auto space-y-6">
-            {/* Header */}
             <div className="flex items-center gap-4">
               <Link href="/books">
-                <Button 
-                  variant="outline" 
-                  size="sm"
-                  className="backdrop-blur-sm border-border/50 hover:bg-muted/30"
-                >
+                <Button variant="outline" size="sm" className="backdrop-blur-sm border-border/50 hover:bg-muted/30">
                   <ArrowLeft className="mr-2 h-4 w-4" />
                   Back to Books
                 </Button>
@@ -167,26 +169,24 @@ export default function AddBookPage() {
                   Add New Book
                 </h1>
                 <p className="text-muted-foreground">
-                  {currentUser ? `Adding as: ${currentUser.email} (${currentUser.role})` : "Enter details for a new book"}
+                  {currentUser ? `Adding as: ${currentUser.email}` : "Enter book details"}
                 </p>
               </div>
             </div>
 
-            <Card className="backdrop-blur-xl border-border/30 bg-gradient-to-b from-background/95 to-background/90 shadow-lg shadow-indigo-500/10">
+            <Card className="backdrop-blur-xl border-border/30 bg-gradient-to-b from-background/95 to-background/90 shadow-lg">
               <CardHeader>
                 <CardTitle className="bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">
                   Book Details
                 </CardTitle>
-                <CardDescription>Fill in the information for this book</CardDescription>
+                <CardDescription>All fields marked * are required.</CardDescription>
               </CardHeader>
               <CardContent>
                 <form onSubmit={handleSubmit} className="space-y-6">
                   {/* Title & Author */}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div className="space-y-3">
-                      <Label htmlFor="title" className="text-sm font-medium text-foreground/80">
-                        Title *
-                      </Label>
+                      <Label htmlFor="title">Title *</Label>
                       <div className="relative">
                         <BookOpen className="absolute left-3 top-3 h-4 w-4 text-indigo-600" />
                         <Input
@@ -195,14 +195,12 @@ export default function AddBookPage() {
                           value={formData.title}
                           onChange={(e) => handleInputChange("title", e.target.value)}
                           required
-                          className="pl-11 bg-background/50 border-border/50 focus:border-indigo-300 transition-colors h-11"
+                          className="pl-11"
                         />
                       </div>
                     </div>
                     <div className="space-y-3">
-                      <Label htmlFor="author" className="text-sm font-medium text-foreground/80">
-                        Author *
-                      </Label>
+                      <Label htmlFor="author">Author *</Label>
                       <div className="relative">
                         <User className="absolute left-3 top-3 h-4 w-4 text-indigo-600" />
                         <Input
@@ -211,7 +209,7 @@ export default function AddBookPage() {
                           value={formData.author}
                           onChange={(e) => handleInputChange("author", e.target.value)}
                           required
-                          className="pl-11 bg-background/50 border-border/50 focus:border-indigo-300 transition-colors h-11"
+                          className="pl-11"
                         />
                       </div>
                     </div>
@@ -220,51 +218,38 @@ export default function AddBookPage() {
                   {/* ISBN & Category */}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div className="space-y-3">
-                      <Label htmlFor="isbn" className="text-sm font-medium text-foreground/80">
-                        ISBN *
-                      </Label>
+                      <Label htmlFor="isbn">ISBN *</Label>
                       <div className="relative">
                         <Hash className="absolute left-3 top-3 h-4 w-4 text-indigo-600" />
                         <Input
                           id="isbn"
-                          placeholder="978-0-123456-78-9"
+                          placeholder="978-1234567890"
                           value={formData.isbn}
                           onChange={(e) => handleInputChange("isbn", e.target.value)}
                           required
-                          className="pl-11 bg-background/50 border-border/50 focus:border-indigo-300 transition-colors h-11"
+                          className="pl-11"
                         />
                       </div>
                     </div>
                     <div className="space-y-3">
-                      <Label htmlFor="category" className="text-sm font-medium text-foreground/80">
-                        Category *
-                      </Label>
+                      <Label htmlFor="category">Category *</Label>
                       <div className="relative">
                         <Tag className="absolute left-3 top-3 h-4 w-4 text-indigo-600 z-10" />
                         <Select
                           value={formData.category || undefined}
                           onValueChange={(value) => handleInputChange("category", value)}
                         >
-                          <SelectTrigger className="pl-11 bg-background/50 border-border/50 focus:border-indigo-300 h-11">
+                          <SelectTrigger className="pl-11">
                             <SelectValue placeholder="Select category" />
                           </SelectTrigger>
                           <SelectContent>
-                            {[
-                              "Fiction",
-                              "Non-Fiction",
-                              "Science",
-                              "History",
-                              "Biography",
-                              "Romance",
-                              "Mystery",
-                              "Fantasy",
-                              "Dystopian",
-                              "Children",
-                            ].map((cat) => (
-                              <SelectItem key={cat} value={cat}>
-                                {cat}
-                              </SelectItem>
-                            ))}
+                            {["Fiction", "Non-Fiction", "Science", "History", "Biography", "Romance", "Mystery", "Fantasy"].map(
+                              (cat) => (
+                                <SelectItem key={cat} value={cat}>
+                                  {cat}
+                                </SelectItem>
+                              )
+                            )}
                           </SelectContent>
                         </Select>
                       </div>
@@ -273,14 +258,12 @@ export default function AddBookPage() {
 
                   {/* Status */}
                   <div className="space-y-3">
-                    <Label htmlFor="status" className="text-sm font-medium text-foreground/80">
-                      Status
-                    </Label>
+                    <Label htmlFor="status">Status</Label>
                     <Select
                       value={formData.status || undefined}
                       onValueChange={(value) => handleInputChange("status", value)}
                     >
-                      <SelectTrigger className="bg-background/50 border-border/50 focus:border-indigo-300 h-11">
+                      <SelectTrigger>
                         <SelectValue placeholder="Select status" />
                       </SelectTrigger>
                       <SelectContent>
@@ -292,41 +275,26 @@ export default function AddBookPage() {
                   </div>
 
                   {error && (
-                    <Alert variant="destructive" className="backdrop-blur-sm border-destructive/50">
+                    <Alert variant="destructive">
                       <AlertDescription>{error}</AlertDescription>
                     </Alert>
                   )}
 
                   {/* Actions */}
                   <div className="flex flex-col sm:flex-row gap-4 pt-4 border-t border-border/30">
-                    <Button 
-                      type="submit" 
-                      disabled={isLoading}
-                      className={cn(
-                        "flex-1 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700",
-                        "text-white shadow-lg shadow-indigo-500/25 hover:shadow-indigo-500/40",
-                        "transition-all duration-300 transform hover:scale-[1.02]",
-                        "border-0 h-11"
-                      )}
-                    >
+                    <Button type="submit" disabled={isLoading} className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white">
                       {isLoading ? (
                         <>
-                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                          Adding...
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Adding...
                         </>
                       ) : (
                         <>
-                          <Save className="mr-2 h-4 w-4" />
-                          Add Book
+                          <Save className="mr-2 h-4 w-4" /> Add Book
                         </>
                       )}
                     </Button>
                     <Link href="/books" className="flex-1">
-                      <Button 
-                        type="button" 
-                        variant="outline" 
-                        className="w-full h-11 backdrop-blur-sm border-border/50 hover:bg-muted/30"
-                      >
+                      <Button type="button" variant="outline" className="w-full">
                         Cancel
                       </Button>
                     </Link>
