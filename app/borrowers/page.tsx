@@ -28,9 +28,7 @@ import {
   Filter,
   Users,
   BookCheck,
-  Clock,
-  BookX,
-  CheckCircle
+  Clock
 } from "lucide-react"
 import { createClient } from "@supabase/supabase-js"
 import { cn } from "@/lib/utils"
@@ -46,68 +44,32 @@ const statusColors = {
   overdue: "bg-red-100 text-red-800 border-red-200",
 }
 
-interface Patron {
-  id: string
-  full_name: string
-  email: string
-  phone?: string
-  member_since: string
-  status: "active" | "inactive" | "archived"
-}
-
-interface Book {
-  id: string
-  title: string
-  isbn?: string
-  author?: string
-}
-
-interface Loan {
-  id: string
-  status: string
-  due_date: string
-  loan_date: string
-  returned_date?: string
-  created_at: string
-  patron_id: string
-  book_id: string
-  patron: {
-    id: string
-    name: string
-    email: string
-    status: string
-  }
-  book: Book
-}
-
 export default function BorrowersPage() {
-  const [borrowers, setBorrowers] = useState<Patron[]>([])
-  const [loans, setLoans] = useState<Loan[]>([])
+  const [borrowers, setBorrowers] = useState<any[]>([])
+  const [loans, setLoans] = useState<any[]>([])
   const [searchTerm, setSearchTerm] = useState("")
   const [statusFilter, setStatusFilter] = useState("all")
   const [activeTab, setActiveTab] = useState("borrowers")
   const [loading, setLoading] = useState(true)
-  const [selectedPatron, setSelectedPatron] = useState<Patron | null>(null)
-  const [showPatronDetail, setShowPatronDetail] = useState(false)
 
   // Overdue calculation function
-  const isOverdue = (loan: Loan): boolean => {
+  const isOverdue = (loan: any): boolean => {
     // Skip returned loans
     if (loan.status === "returned" || loan.returned_date) {
       return false
     }
 
-    // Determine due date - prioritize due_date, then calculate from loan_date
+    // Determine due date
     let dueDate: Date | null = null
     
     if (loan.due_date) {
       dueDate = new Date(loan.due_date)
-    } else if (loan.loan_date) {
-      // Default to loan_date + 14 days if no due date
-      dueDate = new Date(loan.loan_date)
+    } else if (loan.doc_date) {
+      dueDate = new Date(loan.doc_date)
+    } else if (loan.created_at) {
+      // Default to created_at + 14 days if no due date
+      dueDate = new Date(loan.created_at)
       dueDate.setDate(dueDate.getDate() + 14)
-    } else {
-      return false
     }
 
     if (!dueDate || isNaN(dueDate.getTime())) {
@@ -115,22 +77,20 @@ export default function BorrowersPage() {
     }
 
     const today = new Date()
-    dueDate.setHours(23, 59, 59, 999) // End of day
-    today.setHours(23, 59, 59, 999)
+    dueDate.setHours(0, 0, 0, 0)
+    today.setHours(0, 0, 0, 0)
     
     return dueDate < today
   }
 
   // Calculate days overdue
-  const getDaysOverdue = (loan: Loan): number => {
-    if (!isOverdue(loan)) return 0
-
-    const dueDate = loan.due_date 
-      ? new Date(loan.due_date) 
-      : new Date(loan.loan_date)
+  const getDaysOverdue = (loan: any): number => {
+    const dueDate = loan.due_date ? new Date(loan.due_date) : 
+                   loan.doc_date ? new Date(loan.doc_date) : 
+                   new Date(loan.created_at)
     
     // Add default loan period if no specific due date
-    if (!loan.due_date) {
+    if (!loan.doc_date && !loan.due_date) {
       dueDate.setDate(dueDate.getDate() + 14)
     }
     
@@ -139,56 +99,25 @@ export default function BorrowersPage() {
     return Math.max(0, Math.ceil(diffTime / (1000 * 60 * 60 * 24)))
   }
 
-  // Format date for display
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric'
-    })
-  }
-
   useEffect(() => {
     const fetchData = async () => {
       setLoading(true)
       try {
         // Fetch patrons
-        const { data: patronsData, error: patronsError } = await supabase
+        const { data: patronsData } = await supabase
           .from("patrons")
           .select("*")
           .order("member_since", { ascending: false })
 
-        if (patronsError) {
-          console.error("Error fetching patrons:", patronsError)
-          return
-        }
-
         // Fetch loans with proper joins
-        const { data: loansData, error: loansError } = await supabase
+        const { data: loansData } = await supabase
           .from("loans")
           .select(`
             *,
-            patrons:patron_id (
-              id,
-              full_name,
-              email,
-              phone,
-              status,
-              member_since
-            ),
-            books:book_id (
-              id,
-              title,
-              isbn,
-              author
-            )
+            patrons (*),
+            books (*)
           `)
           .order("created_at", { ascending: false })
-
-        if (loansError) {
-          console.error("Error fetching loans:", loansError)
-          return
-        }
 
         // Format patrons data
         const formattedPatrons = (patronsData || []).map(patron => ({
@@ -196,22 +125,25 @@ export default function BorrowersPage() {
           status: patron.status === "archived" ? "inactive" : patron.status
         }))
 
-        // Format loans data with proper typing
-        const formattedLoans: Loan[] = (loansData || []).map(loan => ({
+        // Format loans data
+        const formattedLoans = (loansData || []).map(loan => ({
           id: loan.id,
           status: loan.status,
           due_date: loan.due_date,
-          loan_date: loan.loan_date,
+          doc_date: loan.doc_date,
           created_at: loan.created_at,
+          loan_date: loan.loan_date,
           returned_date: loan.returned_date,
           patron_id: loan.patron_id,
           book_id: loan.book_id,
-          patron: {
+          patron: loan.patrons ? {
             id: loan.patrons.id,
             name: loan.patrons.full_name,
             email: loan.patrons.email,
+            phone: loan.patrons.phone,
             status: loan.patrons.status,
-          },
+            joined: loan.patrons.member_since,
+          } : { name: "Unknown Patron", email: "Unknown", joined: "Unknown" },
           book: loan.books,
         }))
 
@@ -245,11 +177,6 @@ export default function BorrowersPage() {
   // Get overdue loans
   const overdueLoans = loans.filter(loan => isOverdue(loan))
 
-  // Get returned loans (loan history)
-  const returnedLoans = loans.filter(loan => 
-    loan.status === "returned" || loan.returned_date
-  )
-
   // Get loans by patron
   const getLoansByPatron = (patronId: string) => {
     return loans.filter(loan => loan.patron_id === patronId)
@@ -265,19 +192,6 @@ export default function BorrowersPage() {
   // Get overdue loans by patron
   const getOverdueLoansByPatron = (patronId: string) => {
     return getLoansByPatron(patronId).filter(loan => isOverdue(loan))
-  }
-
-  // Get returned loans by patron (loan history)
-  const getReturnedLoansByPatron = (patronId: string) => {
-    return getLoansByPatron(patronId).filter(loan => 
-      loan.status === "returned" || loan.returned_date
-    )
-  }
-
-  // View patron profile with detailed loan history
-  const handleViewProfile = (patron: Patron) => {
-    setSelectedPatron(patron)
-    setShowPatronDetail(true)
   }
 
   if (loading) {
@@ -346,198 +260,6 @@ export default function BorrowersPage() {
               </CardContent>
             </Card>
 
-            {/* Patron Detail Modal */}
-            {showPatronDetail && selectedPatron && (
-              <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-                <Card className="w-full max-w-4xl max-h-[90vh] overflow-hidden backdrop-blur-xl border-border/30 bg-gradient-to-b from-background/95 to-background/90 shadow-2xl shadow-indigo-500/20">
-                  <CardHeader className="border-b border-border/30">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <CardTitle className="text-2xl bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">
-                          {selectedPatron.full_name}
-                        </CardTitle>
-                        <CardDescription>
-                          Patron Profile • Member since {formatDate(selectedPatron.member_since)}
-                        </CardDescription>
-                      </div>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setShowPatronDetail(false)}
-                        className="backdrop-blur-sm border-border/50"
-                      >
-                        Close
-                      </Button>
-                    </div>
-                  </CardHeader>
-                  <CardContent className="p-6 overflow-y-auto">
-                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                      {/* Patron Information */}
-                      <div className="lg:col-span-1 space-y-4">
-                        <Card>
-                          <CardHeader>
-                            <CardTitle className="text-lg">Contact Information</CardTitle>
-                          </CardHeader>
-                          <CardContent className="space-y-3">
-                            <div className="flex items-center gap-3">
-                              <Mail className="h-4 w-4 text-indigo-600" />
-                              <div>
-                                <p className="text-sm font-medium">Email</p>
-                                <p className="text-sm text-muted-foreground">{selectedPatron.email}</p>
-                              </div>
-                            </div>
-                            <div className="flex items-center gap-3">
-                              <Phone className="h-4 w-4 text-indigo-600" />
-                              <div>
-                                <p className="text-sm font-medium">Phone</p>
-                                <p className="text-sm text-muted-foreground">{selectedPatron.phone || "Not provided"}</p>
-                              </div>
-                            </div>
-                            <div className="flex items-center gap-3">
-                              <Calendar className="h-4 w-4 text-indigo-600" />
-                              <div>
-                                <p className="text-sm font-medium">Member Since</p>
-                                <p className="text-sm text-muted-foreground">{formatDate(selectedPatron.member_since)}</p>
-                              </div>
-                            </div>
-                            <div className="pt-2">
-                              <Badge className={cn("backdrop-blur-sm border", statusColors[selectedPatron.status] || statusColors.inactive)}>
-                                {selectedPatron.status?.toUpperCase()}
-                              </Badge>
-                            </div>
-                          </CardContent>
-                        </Card>
-
-                        {/* Loan Statistics */}
-                        <Card>
-                          <CardHeader>
-                            <CardTitle className="text-lg">Loan Statistics</CardTitle>
-                          </CardHeader>
-                          <CardContent>
-                            <div className="grid grid-cols-2 gap-4">
-                              <div className="text-center p-3 bg-blue-50/50 rounded-lg backdrop-blur-sm border border-blue-200/50">
-                                <div className="text-xl font-bold text-blue-600">{getLoansByPatron(selectedPatron.id).length}</div>
-                                <div className="text-xs text-muted-foreground">Total Loans</div>
-                              </div>
-                              <div className="text-center p-3 bg-green-50/50 rounded-lg backdrop-blur-sm border border-green-200/50">
-                                <div className="text-xl font-bold text-green-600">{getActiveLoansByPatron(selectedPatron.id).length}</div>
-                                <div className="text-xs text-muted-foreground">Active</div>
-                              </div>
-                              <div className="text-center p-3 bg-red-50/50 rounded-lg backdrop-blur-sm border border-red-200/50">
-                                <div className="text-xl font-bold text-red-600">{getOverdueLoansByPatron(selectedPatron.id).length}</div>
-                                <div className="text-xs text-muted-foreground">Overdue</div>
-                              </div>
-                              <div className="text-center p-3 bg-gray-50/50 rounded-lg backdrop-blur-sm border border-gray-200/50">
-                                <div className="text-xl font-bold text-gray-600">{getReturnedLoansByPatron(selectedPatron.id).length}</div>
-                                <div className="text-xs text-muted-foreground">Returned</div>
-                              </div>
-                            </div>
-                          </CardContent>
-                        </Card>
-                      </div>
-
-                      {/* Loan History */}
-                      <div className="lg:col-span-2 space-y-6">
-                        {/* Active Loans */}
-                        <Card>
-                          <CardHeader>
-                            <CardTitle className="flex items-center gap-2">
-                              <BookCheck className="h-5 w-5 text-blue-600" />
-                              Active Loans ({getActiveLoansByPatron(selectedPatron.id).length})
-                            </CardTitle>
-                          </CardHeader>
-                          <CardContent>
-                            {getActiveLoansByPatron(selectedPatron.id).length > 0 ? (
-                              <div className="space-y-3">
-                                {getActiveLoansByPatron(selectedPatron.id).map(loan => {
-                                  const isLoanOverdue = isOverdue(loan)
-                                  return (
-                                    <div
-                                      key={loan.id}
-                                      className={cn(
-                                        "flex items-center justify-between p-3 rounded-lg backdrop-blur-sm border",
-                                        isLoanOverdue
-                                          ? "bg-red-50/50 border-red-200/50"
-                                          : "bg-blue-50/50 border-blue-200/50"
-                                      )}
-                                    >
-                                      <div className="flex-1">
-                                        <p className="font-medium text-sm">{loan.book?.title || "Unknown Book"}</p>
-                                        <p className="text-xs text-muted-foreground">
-                                          Borrowed: {formatDate(loan.loan_date)} • 
-                                          Due: {loan.due_date ? formatDate(loan.due_date) : "Not set"}
-                                        </p>
-                                      </div>
-                                      <Badge
-                                        className={cn(
-                                          "backdrop-blur-sm whitespace-nowrap",
-                                          isLoanOverdue
-                                            ? "bg-red-100 text-red-800 border-red-200"
-                                            : "bg-blue-100 text-blue-800 border-blue-200"
-                                        )}
-                                      >
-                                        {isLoanOverdue ? `Overdue ${getDaysOverdue(loan)}d` : "Active"}
-                                      </Badge>
-                                    </div>
-                                  )
-                                })}
-                              </div>
-                            ) : (
-                              <div className="text-center py-6 text-muted-foreground">
-                                <BookOpen className="h-12 w-12 mx-auto mb-3 opacity-50" />
-                                <p>No active loans</p>
-                              </div>
-                            )}
-                          </CardContent>
-                        </Card>
-
-                        {/* Loan History */}
-                        <Card>
-                          <CardHeader>
-                            <CardTitle className="flex items-center gap-2">
-                              <CheckCircle className="h-5 w-5 text-green-600" />
-                              Loan History ({getReturnedLoansByPatron(selectedPatron.id).length})
-                            </CardTitle>
-                          </CardHeader>
-                          <CardContent>
-                            {getReturnedLoansByPatron(selectedPatron.id).length > 0 ? (
-                              <div className="space-y-3 max-h-80 overflow-y-auto">
-                                {getReturnedLoansByPatron(selectedPatron.id)
-                                  .sort((a, b) => new Date(b.returned_date!).getTime() - new Date(a.returned_date!).getTime())
-                                  .map(loan => (
-                                    <div
-                                      key={loan.id}
-                                      className="flex items-center justify-between p-3 rounded-lg backdrop-blur-sm border border-green-200/50 bg-green-50/50"
-                                    >
-                                      <div className="flex-1">
-                                        <p className="font-medium text-sm">{loan.book?.title || "Unknown Book"}</p>
-                                        <p className="text-xs text-muted-foreground">
-                                          Borrowed: {formatDate(loan.loan_date)} • 
-                                          Returned: {loan.returned_date ? formatDate(loan.returned_date) : "Unknown"}
-                                        </p>
-                                      </div>
-                                      <Badge className="bg-green-100 text-green-800 border-green-200 backdrop-blur-sm">
-                                        Returned
-                                      </Badge>
-                                    </div>
-                                  ))
-                                }
-                              </div>
-                            ) : (
-                              <div className="text-center py-6 text-muted-foreground">
-                                <BookX className="h-12 w-12 mx-auto mb-3 opacity-50" />
-                                <p>No loan history</p>
-                              </div>
-                            )}
-                          </CardContent>
-                        </Card>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              </div>
-            )}
-
             {/* Tabs */}
             <Tabs value={activeTab} onValueChange={setActiveTab}>
               <TabsList className="grid w-full grid-cols-3 backdrop-blur-sm bg-background/50 border-border/30">
@@ -571,7 +293,6 @@ export default function BorrowersPage() {
                     const patronLoans = getLoansByPatron(patron.id)
                     const patronActiveLoans = getActiveLoansByPatron(patron.id)
                     const patronOverdueLoans = getOverdueLoansByPatron(patron.id)
-                    const patronReturnedLoans = getReturnedLoansByPatron(patron.id)
 
                     return (
                       <Card 
@@ -593,7 +314,7 @@ export default function BorrowersPage() {
                           </div>
                           <CardTitle className="text-lg text-foreground">{patron.full_name}</CardTitle>
                           <CardDescription>
-                            Member since {formatDate(patron.member_since)}
+                            Member since {patron.member_since ? new Date(patron.member_since).toLocaleDateString() : "Unknown"}
                           </CardDescription>
                         </CardHeader>
                         <CardContent>
@@ -606,9 +327,13 @@ export default function BorrowersPage() {
                               <Phone className="h-4 w-4 text-indigo-600" />
                               <span>{patron.phone || "No phone"}</span>
                             </div>
+                            <div className="flex items-center gap-2 text-sm">
+                              <Calendar className="h-4 w-4 text-indigo-600" />
+                              <span>Joined {patron.member_since ? new Date(patron.member_since).toLocaleDateString() : "Unknown"}</span>
+                            </div>
 
                             {/* Patron loans summary */}
-                            <div className="grid grid-cols-4 gap-2 pt-2">
+                            <div className="grid grid-cols-3 gap-2 pt-2">
                               <div className="text-center p-2 bg-blue-50/50 rounded-lg backdrop-blur-sm">
                                 <div className="text-lg font-bold text-blue-600">{patronLoans.length}</div>
                                 <div className="text-xs text-muted-foreground">Total</div>
@@ -621,17 +346,13 @@ export default function BorrowersPage() {
                                 <div className="text-lg font-bold text-red-600">{patronOverdueLoans.length}</div>
                                 <div className="text-xs text-muted-foreground">Overdue</div>
                               </div>
-                              <div className="text-center p-2 bg-gray-50/50 rounded-lg backdrop-blur-sm">
-                                <div className="text-lg font-bold text-gray-600">{patronReturnedLoans.length}</div>
-                                <div className="text-xs text-muted-foreground">History</div>
-                              </div>
                             </div>
 
-                            {/* Current active loans preview */}
+                            {/* Current active loans */}
                             {patronActiveLoans.length > 0 && (
                               <div className="mt-4 space-y-2">
                                 <p className="font-medium text-sm text-foreground">Current Loans:</p>
-                                {patronActiveLoans.slice(0, 2).map(loan => {
+                                {patronActiveLoans.slice(0, 3).map(loan => {
                                   const isLoanOverdue = isOverdue(loan)
                                   return (
                                     <div 
@@ -643,7 +364,7 @@ export default function BorrowersPage() {
                                           : "bg-green-50/50 border border-green-200/50"
                                       )}
                                     >
-                                      <span className="truncate flex-1 text-xs">{loan.book?.title || "Unknown Book"}</span>
+                                      <span className="truncate flex-1">{loan.book?.title || "Unknown Book"}</span>
                                       <Badge 
                                         variant="outline" 
                                         className={cn(
@@ -656,25 +377,17 @@ export default function BorrowersPage() {
                                     </div>
                                   )
                                 })}
-                                {patronActiveLoans.length > 2 && (
+                                {patronActiveLoans.length > 3 && (
                                   <div className="text-center text-xs text-muted-foreground">
-                                    +{patronActiveLoans.length - 2} more active loans
+                                    +{patronActiveLoans.length - 3} more loans
                                   </div>
                                 )}
                               </div>
                             )}
 
-                            {patronActiveLoans.length === 0 && patronReturnedLoans.length > 0 && (
-                              <div className="text-center p-2 bg-gray-50/50 rounded-lg backdrop-blur-sm mt-2">
-                                <p className="text-xs text-muted-foreground">
-                                  {patronReturnedLoans.length} previous loan{patronReturnedLoans.length !== 1 ? 's' : ''}
-                                </p>
-                              </div>
-                            )}
-
-                            {patronLoans.length === 0 && (
-                              <div className="text-center p-2 bg-gray-50/50 rounded-lg backdrop-blur-sm mt-2">
-                                <p className="text-xs text-muted-foreground">No loan history</p>
+                            {patronActiveLoans.length === 0 && (
+                              <div className="text-center p-3 bg-gray-50/50 rounded-lg backdrop-blur-sm mt-4">
+                                <p className="text-sm text-muted-foreground">No active loans</p>
                               </div>
                             )}
                           </div>
@@ -682,10 +395,9 @@ export default function BorrowersPage() {
                             variant="outline" 
                             size="sm" 
                             className="w-full mt-4 bg-background/50 backdrop-blur-sm border-border/50 hover:bg-indigo-50 hover:border-indigo-200"
-                            onClick={() => handleViewProfile(patron)}
                           >
                             <Eye className="mr-2 h-3 w-3 text-indigo-600" />
-                            View Profile & Loans
+                            View Profile
                           </Button>
                         </CardContent>
                       </Card>
