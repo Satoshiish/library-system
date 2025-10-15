@@ -929,38 +929,46 @@ export default function TransactionsPage() {
                             </SelectTrigger>
 
                             <SelectContent className="max-h-60 overflow-y-auto">
-                              {borrowers.length > 0 ? (
-                                borrowers.map((b) => (
-                                  <SelectItem key={b.id} value={b.id} className="py-2">
-                                    <div className="flex flex-col gap-1">
-                                      <div className="flex items-center justify-between">
-                                        <span className="font-medium text-sm">{b.full_name}</span>
-                                        <Badge
-                                          variant="default"
-                                          className="text-xs bg-green-100 text-green-800 border-green-200"
-                                        >
-                                          Active
-                                        </Badge>
-                                      </div>
-                                      {b.email && (
-                                        <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                                          <Mail className="h-3 w-3" /> {b.email}
-                                        </div>
-                                      )}
-                                      {b.phone && (
-                                        <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                                          <Phone className="h-3 w-3" /> {b.phone}
-                                        </div>
-                                      )}
+                            {borrowers.length > 0 ? (
+                              borrowers.map((b) => (
+                                <SelectItem
+                                  key={b.id}
+                                  value={b.id}
+                                  className="py-2 px-3 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 transition-colors rounded-md"
+                                >
+                                  <div className="flex flex-col gap-1">
+                                    <div className="flex items-center justify-between">
+                                      <span className="font-medium text-sm text-foreground">{b.full_name}</span>
+                                      <Badge
+                                        variant="default"
+                                        className="text-xs bg-green-100 text-green-800 border-green-200"
+                                      >
+                                        Active
+                                      </Badge>
                                     </div>
-                                  </SelectItem>
-                                ))
-                              ) : (
-                                <SelectItem value="no-patrons" disabled>
-                                  No active patrons available
+
+                                    {b.email && (
+                                      <div className="flex items-center gap-1 text-xs text-muted-foreground truncate">
+                                        <Mail className="h-3 w-3 flex-shrink-0" />
+                                        <span className="truncate">{b.email}</span>
+                                      </div>
+                                    )}
+
+                                    {b.phone && (
+                                      <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                                        <Phone className="h-3 w-3 flex-shrink-0" />
+                                        <span>{b.phone}</span>
+                                      </div>
+                                    )}
+                                  </div>
                                 </SelectItem>
-                              )}
-                            </SelectContent>
+                              ))
+                            ) : (
+                              <SelectItem value="no-patrons" disabled>
+                                No active patrons available
+                              </SelectItem>
+                            )}
+                          </SelectContent>
                           </Select>
 
                           {/* ✅ Show selected patron info below dropdown */}
