@@ -136,16 +136,31 @@ export default function DashboardPage() {
         overdueBooks: overdueBooksCount,
       })
 
-      // ✅ Recent activity (always shows proper names)
-      const recentActivityData = loansData.slice(0, 5).map(loan => ({
-        id: loan.id,
-        title: loan.books?.title || `Book ${loan.book_id}`,
-        author: loan.books?.author || "Unknown Author",
-        borrowerName: loan.patrons?.full_name || `Patron ${loan.patron_id}`,
-        status: loan.status,
-        created_at: loan.created_at,
-        returned_date: loan.returned_date,
-      }))
+      // ✅ Recent activity (FIXED: uses full_name from patrons)
+      const recentActivityData = loansData.slice(0, 5).map(loan => {
+        // Get patron name with proper fallbacks
+        let borrowerName = `Patron ${loan.patron_id}`;
+        
+        if (loan.patrons?.full_name) {
+          borrowerName = loan.patrons.full_name;
+        } else {
+          // Fallback: look up in patronMap
+          const patron = patronMap.get(loan.patron_id);
+          if (patron?.full_name) {
+            borrowerName = patron.full_name;
+          }
+        }
+
+        return {
+          id: loan.id,
+          title: loan.books?.title || `Book ${loan.book_id}`,
+          author: loan.books?.author || "Unknown Author",
+          borrowerName: borrowerName, // Now uses full_name correctly
+          status: loan.status,
+          created_at: loan.created_at,
+          returned_date: loan.returned_date,
+        }
+      })
       setRecentActivity(recentActivityData)
 
       // Popular books (unchanged)
@@ -166,7 +181,7 @@ export default function DashboardPage() {
         .slice(0, 5)
       setPopularBooks(popularBooksList)
 
-      // ✅ Overdue books (also shows proper names)
+      // ✅ Overdue books (FIXED: uses full_name from patrons)
       const overdueBooksList = overdueLoans.map(loan => {
         const dueDate = loan.due_date
           ? new Date(loan.due_date)
@@ -180,16 +195,40 @@ export default function DashboardPage() {
           Math.ceil((today.getTime() - dueDate.getTime()) / (1000 * 60 * 60 * 24))
         )
 
+        // Get patron name with proper fallbacks
+        let borrowerName = `Patron ${loan.patron_id}`;
+        
+        if (loan.patrons?.full_name) {
+          borrowerName = loan.patrons.full_name;
+        } else {
+          // Fallback: look up in patronMap
+          const patron = patronMap.get(loan.patron_id);
+          if (patron?.full_name) {
+            borrowerName = patron.full_name;
+          }
+        }
+
         return {
           id: loan.id,
           title: loan.books?.title || `Book ${loan.book_id}`,
           author: loan.books?.author || "Unknown Author",
-          borrower: loan.patrons?.full_name || `Patron ${loan.patron_id}`,
+          borrower: borrowerName, // Now uses full_name correctly
           dueDate: dueDate.toISOString(),
           daysOverdue,
         }
       })
       setOverdueBooks(overdueBooksList)
+
+      // Debug log to verify patron names are working
+      console.log("🔍 Patron name resolution check:", {
+        totalLoans: loansData.length,
+        sampleLoan: loansData[0] ? {
+          patron_id: loansData[0].patron_id,
+          patronData: loansData[0].patrons,
+          resolvedName: recentActivityData[0]?.borrowerName
+        } : 'No loans',
+        patronMapSize: patronMap.size
+      })
     } catch (err) {
       console.error("❌ Error fetching dashboard data:", err)
     } finally {

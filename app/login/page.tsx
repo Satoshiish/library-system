@@ -161,13 +161,6 @@ export default function LoginPage() {
               )}
             </Button>
           </form>
-          
-          <div className="mt-6 p-4 rounded-lg bg-muted/30 border border-border">
-            <div className="text-center text-sm text-muted-foreground">
-              <p className="font-medium mb-1">Demo Credentials</p>
-              <p>admin@library.com / admin123</p>
-            </div>
-          </div>
         </CardContent>
       </Card>
     </div>
