@@ -1002,36 +1002,78 @@ export default function TransactionsPage() {
                           <Label htmlFor="book" className="text-sm font-medium text-foreground/80">
                             Book
                           </Label>
+
                           <Select
                             value={newLoan.book_id}
                             onValueChange={(val) => setNewLoan({ ...newLoan, book_id: val })}
                           >
                             <SelectTrigger className="bg-background/50 border-border/50 h-11">
-                              <SelectValue placeholder="Select book" />
+                              <SelectValue
+                                placeholder={
+                                  books.filter((book) => book.status === "available").length > 0
+                                    ? "Select available book"
+                                    : "No available books"
+                                }
+                              />
                             </SelectTrigger>
-                            <SelectContent>
-                              {books
-                                .filter((book) => book.status === "available")
-                                .map((b) => (
-                                  <SelectItem key={b.id} value={b.id}>
-                                    <div className="flex flex-col">
-                                      <span className="font-medium">{b.title}</span>
-                                      <span className="text-xs text-muted-foreground">
-                                        by {b.author}
-                                      </span>
-                                      {b.isbn && (
-                                        <span className="text-xs text-muted-foreground">
-                                          ISBN: {b.isbn}
-                                        </span>
-                                      )}
-                                    </div>
-                                  </SelectItem>
-                                ))}
+
+                            <SelectContent className="max-h-60 overflow-y-auto">
+                              {books.filter((book) => book.status === "available").length > 0 ? (
+                                books
+                                  .filter((book) => book.status === "available")
+                                  .map((b) => (
+                                    <SelectItem
+                                      key={b.id}
+                                      value={b.id}
+                                      className="py-2 px-3 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 transition-colors rounded-md"
+                                    >
+                                      <span className="font-medium text-sm">{b.title}</span>
+                                    </SelectItem>
+                                  ))
+                              ) : (
+                                <SelectItem value="no-books" disabled>
+                                  No available books
+                                </SelectItem>
+                              )}
                             </SelectContent>
                           </Select>
+
+                          {/* ✅ Show selected book info below dropdown */}
+                          {newLoan.book_id && (
+                            (() => {
+                              const selected = books.find((b) => b.id === newLoan.book_id);
+                              if (!selected) return null;
+                              return (
+                                <div className="mt-2 rounded-lg border border-border/40 p-3 bg-background/30 backdrop-blur-sm">
+                                  <div className="flex items-center justify-between mb-1">
+                                    <span className="font-medium text-sm">{selected.title}</span>
+                                    <Badge
+                                      variant="default"
+                                      className="text-xs bg-green-100 text-green-800 border-green-200"
+                                    >
+                                      Available
+                                    </Badge>
+                                  </div>
+
+                                  {selected.author && (
+                                    <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                                      <Book className="h-3 w-3" /> {selected.author}
+                                    </div>
+                                  )}
+
+                                  {selected.isbn && (
+                                    <div className="flex items-center gap-1 text-xs text-muted-foreground mt-1">
+                                      <Hash className="h-3 w-3" /> ISBN: {selected.isbn}
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            })()
+                          )}
+
+                          {/* Footer Info */}
                           <p className="text-xs text-muted-foreground">
-                            Showing {books.filter((b) => b.status === "available").length} available
-                            book
+                            Showing {books.filter((b) => b.status === "available").length} available book
                             {books.filter((b) => b.status === "available").length !== 1 ? "s" : ""}
                           </p>
                         </div>
