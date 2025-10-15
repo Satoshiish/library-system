@@ -8,10 +8,11 @@ import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Plus, Search, Edit, Trash2, Eye, Book, Calendar, User, Loader2, X, BookOpen, Filter } from "lucide-react"
+import { Plus, Search, Edit, Trash2, Eye, Book, Calendar, User, Loader2, X, BookOpen, Filter, RefreshCw } from "lucide-react"
 import Link from "next/link"
 import { createClient } from "@supabase/supabase-js"
 import { cn } from "@/lib/utils"
+import { toast } from "sonner"
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -22,6 +23,8 @@ const statusColors = {
   available: "bg-green-100 text-green-800 border-green-200",
   checked_out: "bg-red-100 text-red-800 border-red-200",
   reserved: "bg-yellow-100 text-yellow-800 border-yellow-200",
+  borrowed: "bg-orange-100 text-orange-800 border-orange-200",
+  active: "bg-blue-100 text-blue-800 border-blue-200",
 }
 
 export default function BooksPage() {
@@ -36,92 +39,104 @@ export default function BooksPage() {
   const [bookToDelete, setBookToDelete] = useState<any | null>(null)
   const [deleteError, setDeleteError] = useState<string>("")
 
-  // ✅ IMPROVED: Fetch books with reliable user data for all user types
+  // Helper function to get status description
+  const getStatusDescription = (status: string) => {
+    const descriptions = {
+      available: "Book is available for borrowing",
+      checked_out: "Book is currently checked out",
+      reserved: "Book is reserved for someone",
+      borrowed: "Book is currently on loan",
+      active: "Book is actively on loan",
+    }
+    return descriptions[status] || "Unknown status"
+  }
+
+  // ✅ IMPROVED: Fetch books with reliable status checking
   const fetchBooks = async () => {
     setLoading(true)
     
     try {
-      // Try multiple join approaches
-      const joinAttempts = [
-        // Attempt 1: Standard join
-        supabase.from("books").select(`
-          *,
-          users!inner(full_name, email, role)
-        `),
-        // Attempt 2: Explicit foreign key
-        supabase.from("books").select(`
-          *,
-          users!books_added_by_fkey(full_name, email, role)
-        `),
-        // Attempt 3: Simple join (your current approach)
-        supabase.from("books").select(`
-          *,
-          added_by_user:users(full_name, email, role)
-        `)
-      ]
+      const previousBooks = books // Store current state to detect changes
+      
+      // First, get all books
+      const { data: allBooks, error: booksError } = await supabase
+        .from("books")
+        .select("*")
+        .order("created_at", { ascending: false })
 
-      let booksData = null
-      let lastError = null
+      if (booksError) throw booksError
 
-      // Try each join approach until one works
-      for (const attempt of joinAttempts) {
-        let query = attempt
-        
-        if (searchTerm) {
-          query = query.or(`title.ilike.%${searchTerm}%,author.ilike.%${searchTerm}%,isbn.ilike.%${searchTerm}%`)
-        }
-        if (categoryFilter !== "all") {
-          query = query.eq("category", categoryFilter)
-        }
-        if (statusFilter !== "all") {
-          query = query.eq("status", statusFilter)
-        }
+      // Then, get active loans to check which books are currently checked out
+      const { data: activeLoans, error: loansError } = await supabase
+        .from("loans")
+        .select("book_id, status")
+        .in("status", ["active", "borrowed"]) // Books that are currently out
 
-        const { data, error } = await query.order("created_at", { ascending: false })
-        
-        if (!error && data) {
-          booksData = data
-          console.log("Join successful with data:", data)
-          break
-        }
-        lastError = error
+      if (loansError) {
+        console.error("Error fetching loans:", loansError)
       }
 
-      // If all joins failed, use manual approach
-      if (!booksData) {
-        console.log("All joins failed, using manual approach. Last error:", lastError)
-        const { data: simpleBooks, error: simpleError } = await supabase
-          .from("books")
-          .select("*")
-          .order("created_at", { ascending: false })
+      // Create a set of book IDs that are currently checked out
+      const checkedOutBookIds = new Set(
+        (activeLoans || []).map(loan => loan.book_id)
+      )
 
-        if (simpleError) throw simpleError
+      // Enhance books with accurate status and user data
+      const enhancedBooks = await Promise.all(
+        (allBooks || []).map(async (book) => {
+          // Determine actual status based on loans
+          let actualStatus = book.status
+          
+          // If book is in active loans, it should be checked_out
+          if (checkedOutBookIds.has(book.id)) {
+            actualStatus = "checked_out"
+          } else if (actualStatus === "checked_out") {
+            // If book shows as checked_out but no active loan, correct to available
+            actualStatus = "available"
+          }
 
-        // Manually fetch user data for each book
-        booksData = await Promise.all(
-          (simpleBooks || []).map(async (book) => {
-            if (book.added_by) {
-              try {
-                const { data: user } = await supabase
-                  .from("users")
-                  .select("full_name, email, role")
-                  .eq("id", book.added_by)
-                  .single()
-                return { ...book, added_by_user: user || null }
-              } catch (userError) {
-                console.error(`Error fetching user ${book.added_by}:`, userError)
-                return { ...book, added_by_user: null }
-              }
+          // Fetch user data
+          let addedByUser = null
+          if (book.added_by) {
+            try {
+              const { data: user } = await supabase
+                .from("users")
+                .select("full_name, email, role")
+                .eq("id", book.added_by)
+                .single()
+              addedByUser = user
+            } catch (userError) {
+              console.error(`Error fetching user ${book.added_by}:`, userError)
             }
-            return { ...book, added_by_user: null }
-          })
-        )
-        console.log("Manual fetch completed:", booksData)
-      }
+          }
 
-      setBooks(booksData || [])
+          return {
+            ...book,
+            status: actualStatus, // Use calculated status
+            added_by_user: addedByUser
+          }
+        })
+      )
+
+      console.log("📚 Enhanced books with accurate status:", enhancedBooks)
+      setBooks(enhancedBooks)
+
+      // Show notifications for status changes
+      if (previousBooks.length > 0) {
+        enhancedBooks.forEach(newBook => {
+          const oldBook = previousBooks.find(b => b.id === newBook.id)
+          if (oldBook && oldBook.status !== newBook.status) {
+            console.log(`🔄 Book status changed: ${oldBook.title} from ${oldBook.status} to ${newBook.status}`)
+            toast.info(`Book status updated`, {
+              description: `"${newBook.title}" is now ${newBook.status.replace('_', ' ')}`
+            })
+          }
+        })
+      }
+      
     } catch (error) {
       console.error("Failed to fetch books:", error)
+      toast.error("Failed to load books")
       setBooks([])
     } finally {
       setLoading(false)
@@ -132,6 +147,67 @@ export default function BooksPage() {
     fetchBooks()
   }, [searchTerm, statusFilter, categoryFilter])
 
+  // Real-time subscriptions for automatic updates
+  useEffect(() => {
+    // Subscribe to real-time changes in books table
+    const booksSubscription = supabase
+      .channel('books-changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*', // Listen for all events (INSERT, UPDATE, DELETE)
+          schema: 'public',
+          table: 'books'
+        },
+        (payload) => {
+          console.log('📚 Real-time book update:', payload)
+          toast.info("Book data updated", {
+            description: "Refreshing book list..."
+          })
+          fetchBooks()
+        }
+      )
+      .subscribe()
+
+    // Subscribe to loans table changes to detect book status changes
+    const loansSubscription = supabase
+      .channel('loans-changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'loans'
+        },
+        (payload) => {
+          console.log('📖 Loan transaction update detected:', payload)
+          toast.info("Loan status changed", {
+            description: "Updating book availability..."
+          })
+          fetchBooks()
+        }
+      )
+      .subscribe()
+
+    // Cleanup subscriptions
+    return () => {
+      booksSubscription.unsubscribe()
+      loansSubscription.unsubscribe()
+    }
+  }, [])
+
+  // Optional: Auto-refresh every 30 seconds for reliability
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (!loading) {
+        console.log("🔄 Auto-refreshing books data...")
+        fetchBooks()
+      }
+    }, 30000) // Refresh every 30 seconds
+
+    return () => clearInterval(interval)
+  }, [loading])
+
   // ✅ FIXED: Handle empty/null categories properly
   const categories = Array.from(new Set(
     books
@@ -139,6 +215,19 @@ export default function BooksPage() {
       .filter(category => category && category.trim() !== "") // Remove empty/null categories
       .map(category => category.trim()) // Trim whitespace
   )).sort() // Sort alphabetically
+
+  // Filter books based on search and filters
+  const filteredBooks = books.filter(book => {
+    const matchesSearch = !searchTerm || 
+      book.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      book.author.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      book.isbn.toLowerCase().includes(searchTerm.toLowerCase())
+    
+    const matchesStatus = statusFilter === "all" || book.status === statusFilter
+    const matchesCategory = categoryFilter === "all" || book.category === categoryFilter
+    
+    return matchesSearch && matchesStatus && matchesCategory
+  })
 
   // Open delete modal
   const confirmDelete = (book: any) => {
@@ -180,6 +269,7 @@ export default function BooksPage() {
       }
 
       console.log("✅ Book deleted successfully")
+      toast.success("Book deleted successfully")
       
       // Update UI immediately
       setBooks((prev) => prev.filter((b) => b.id !== bookToDelete.id))
@@ -191,6 +281,7 @@ export default function BooksPage() {
     } catch (err) {
       console.error("❌ Unexpected error during delete:", err)
       setDeleteError("Failed to delete book. Please try again.")
+      toast.error("Failed to delete book")
     } finally {
       setDeletingBookId(null)
     }
@@ -215,19 +306,95 @@ export default function BooksPage() {
                 <h1 className="text-2xl sm:text-3xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">
                   Books
                 </h1>
-                <p className="text-sm sm:text-base text-muted-foreground">Manage your library inventory</p>
+                <p className="text-sm sm:text-base text-muted-foreground">Manage your library inventory with real-time updates</p>
               </div>
-              <Link href="/books/add">
-                <Button className={cn(
-                  "w-full sm:w-auto bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700",
-                  "text-white shadow-lg shadow-indigo-500/25 hover:shadow-indigo-500/40",
-                  "transition-all duration-300 transform hover:scale-[1.02]",
-                  "border-0"
-                )}>
-                  <Plus className="mr-2 h-4 w-4" />
-                  Add Book
+              <div className="flex gap-2">
+                <Button 
+                  variant="outline"
+                  onClick={fetchBooks}
+                  disabled={loading}
+                  className="backdrop-blur-sm border-border/50 hover:bg-green-50 hover:border-green-200"
+                >
+                  {loading ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <RefreshCw className="h-4 w-4 mr-2" />
+                  )}
+                  Refresh
                 </Button>
-              </Link>
+                <Link href="/books/add">
+                  <Button className={cn(
+                    "w-full sm:w-auto bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700",
+                    "text-white shadow-lg shadow-indigo-500/25 hover:shadow-indigo-500/40",
+                    "transition-all duration-300 transform hover:scale-[1.02]",
+                    "border-0"
+                  )}>
+                    <Plus className="mr-2 h-4 w-4" />
+                    Add Book
+                  </Button>
+                </Link>
+              </div>
+            </div>
+
+            {/* Stats Cards */}
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              <Card className="backdrop-blur-xl border-border/30 bg-gradient-to-b from-background/95 to-background/90 shadow-lg shadow-indigo-500/10">
+                <CardHeader className="flex flex-row items-center justify-between pb-2">
+                  <CardTitle className="text-sm font-medium text-foreground/80">Total Books</CardTitle>
+                  <div className="p-2 rounded-lg bg-gradient-to-tr from-indigo-500/20 to-purple-500/20">
+                    <Book className="h-4 w-4 text-indigo-600" />
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold text-foreground">{books.length}</div>
+                  <p className="text-xs text-muted-foreground">All books in library</p>
+                </CardContent>
+              </Card>
+
+              <Card className="backdrop-blur-xl border-border/30 bg-gradient-to-b from-background/95 to-background/90 shadow-lg shadow-indigo-500/10">
+                <CardHeader className="flex flex-row items-center justify-between pb-2">
+                  <CardTitle className="text-sm font-medium text-foreground/80">Available</CardTitle>
+                  <div className="p-2 rounded-lg bg-gradient-to-tr from-green-500/20 to-emerald-500/20">
+                    <Book className="h-4 w-4 text-green-600" />
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold text-foreground">
+                    {books.filter(b => b.status === 'available').length}
+                  </div>
+                  <p className="text-xs text-muted-foreground">Ready to borrow</p>
+                </CardContent>
+              </Card>
+
+              <Card className="backdrop-blur-xl border-border/30 bg-gradient-to-b from-background/95 to-background/90 shadow-lg shadow-indigo-500/10">
+                <CardHeader className="flex flex-row items-center justify-between pb-2">
+                  <CardTitle className="text-sm font-medium text-foreground/80">Checked Out</CardTitle>
+                  <div className="p-2 rounded-lg bg-gradient-to-tr from-red-500/20 to-orange-500/20">
+                    <Book className="h-4 w-4 text-red-600" />
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold text-foreground">
+                    {books.filter(b => b.status === 'checked_out' || b.status === 'borrowed').length}
+                  </div>
+                  <p className="text-xs text-muted-foreground">Currently on loan</p>
+                </CardContent>
+              </Card>
+
+              <Card className="backdrop-blur-xl border-border/30 bg-gradient-to-b from-background/95 to-background/90 shadow-lg shadow-indigo-500/10">
+                <CardHeader className="flex flex-row items-center justify-between pb-2">
+                  <CardTitle className="text-sm font-medium text-foreground/80">Reserved</CardTitle>
+                  <div className="p-2 rounded-lg bg-gradient-to-tr from-yellow-500/20 to-amber-500/20">
+                    <Book className="h-4 w-4 text-yellow-600" />
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold text-foreground">
+                    {books.filter(b => b.status === 'reserved').length}
+                  </div>
+                  <p className="text-xs text-muted-foreground">On hold</p>
+                </CardContent>
+              </Card>
             </div>
 
             {/* Filters */}
@@ -265,6 +432,7 @@ export default function BooksPage() {
                           <SelectItem value="all">All Status</SelectItem>
                           <SelectItem value="available">Available</SelectItem>
                           <SelectItem value="checked_out">Checked Out</SelectItem>
+                          <SelectItem value="borrowed">Borrowed</SelectItem>
                           <SelectItem value="reserved">Reserved</SelectItem>
                         </SelectContent>
                       </Select>
@@ -303,9 +471,15 @@ export default function BooksPage() {
             {/* Books Display */}
             <Card className="backdrop-blur-xl border-border/30 bg-gradient-to-b from-background/95 to-background/90 shadow-lg shadow-indigo-500/10">
               <CardHeader className="pb-4">
-                <CardTitle className="text-lg sm:text-xl bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">
-                  Book Inventory ({books.length} {books.length === 1 ? 'book' : 'books'})
-                </CardTitle>
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                  <CardTitle className="text-lg sm:text-xl bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">
+                    Book Inventory ({filteredBooks.length} {filteredBooks.length === 1 ? 'book' : 'books'})
+                  </CardTitle>
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                    Real-time updates active
+                  </div>
+                </div>
               </CardHeader>
               <CardContent>
                 {loading ? (
@@ -313,7 +487,7 @@ export default function BooksPage() {
                     <Loader2 className="h-8 w-8 animate-spin text-indigo-600 mx-auto mb-4" />
                     <p className="text-muted-foreground">Loading books...</p>
                   </div>
-                ) : books.length === 0 ? (
+                ) : filteredBooks.length === 0 ? (
                   <div className="text-center py-8">
                     <Book className="h-16 w-16 text-muted-foreground mx-auto mb-4" />
                     <h3 className="text-lg font-medium text-foreground mb-2">No books found</h3>
@@ -332,7 +506,7 @@ export default function BooksPage() {
                   </div>
                 ) : (
                   <div className="space-y-4">
-                    {books.map((book) => (
+                    {filteredBooks.map((book) => (
                       <Card 
                         key={book.id} 
                         className={cn(
@@ -353,10 +527,13 @@ export default function BooksPage() {
                                   <span>{book.author}</span>
                                 </p>
                               </div>
-                              <Badge className={cn(
-                                "flex-shrink-0 text-xs border backdrop-blur-sm",
-                                statusColors[book.status]
-                              )}>
+                              <Badge 
+                                className={cn(
+                                  "flex-shrink-0 text-xs border backdrop-blur-sm cursor-help",
+                                  statusColors[book.status] || "bg-gray-100 text-gray-800 border-gray-200"
+                                )}
+                                title={getStatusDescription(book.status)}
+                              >
                                 {book.status.replace("_", " ").toUpperCase()}
                               </Badge>
                             </div>
@@ -386,11 +563,11 @@ export default function BooksPage() {
                                 <span className="text-muted-foreground">Added by:</span>
                                 <div className="flex items-center gap-1">
                                   <span className="font-medium text-sm">
-                                    {book.added_by_user?.email || book.users?.email || "Unknown"}
+                                    {book.added_by_user?.email || "Unknown"}
                                   </span>
-                                  {(book.added_by_user?.role || book.users?.role) && (
+                                  {book.added_by_user?.role && (
                                     <Badge variant="outline" className="text-xs capitalize backdrop-blur-sm">
-                                      {book.added_by_user?.role || book.users?.role}
+                                      {book.added_by_user.role}
                                     </Badge>
                                   )}
                                 </div>
@@ -472,7 +649,10 @@ export default function BooksPage() {
                 </div>
                 <div className="flex justify-between items-center p-2 bg-muted/30 rounded">
                   <strong>Status:</strong> 
-                  <Badge className={cn("text-xs", statusColors[viewingBook.status])}>
+                  <Badge 
+                    className={cn("text-xs", statusColors[viewingBook.status])}
+                    title={getStatusDescription(viewingBook.status)}
+                  >
                     {viewingBook.status.replace("_", " ").toUpperCase()}
                   </Badge>
                 </div>
@@ -483,10 +663,10 @@ export default function BooksPage() {
                 <div className="flex justify-between items-center p-2 bg-muted/30 rounded">
                   <strong>Added by:</strong> 
                   <div className="text-right">
-                    <div>{viewingBook.added_by_user?.email || viewingBook.users?.email || "Unknown"}</div>
-                    {(viewingBook.added_by_user?.role || viewingBook.users?.role) && (
+                    <div>{viewingBook.added_by_user?.email || "Unknown"}</div>
+                    {viewingBook.added_by_user?.role && (
                       <Badge variant="outline" className="text-xs capitalize mt-1 backdrop-blur-sm">
-                        {viewingBook.added_by_user?.role || viewingBook.users?.role}
+                        {viewingBook.added_by_user.role}
                       </Badge>
                     )}
                   </div>
