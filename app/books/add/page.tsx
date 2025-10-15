@@ -14,6 +14,7 @@ import { ArrowLeft, Save, BookOpen, User, Hash, Tag, Loader2 } from "lucide-reac
 import Link from "next/link"
 import { createClient } from "@supabase/supabase-js"
 import { cn } from "@/lib/utils"
+import { toast } from "sonner"
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -49,6 +50,7 @@ export default function AddBookPage() {
           name: userName,
           role: userRole,
         })
+        toast.success(`Welcome, ${userName || userEmail}!`)
       }
     }
   }, [])
@@ -68,26 +70,31 @@ export default function AddBookPage() {
   const validateForm = () => {
     if (!formData.title.trim() || !formData.author.trim() || !formData.isbn.trim() || !formData.category.trim()) {
       setError("Please fill in all required fields.")
+      toast.error("Please fill in all required fields")
       return false
     }
 
     if (!/^[A-Za-zÀ-ÖØ-öø-ÿ\s.,'-]+$/.test(formData.title)) {
       setError("Title must contain only letters and valid punctuation.")
+      toast.error("Invalid title format")
       return false
     }
 
     if (!/^[A-Za-zÀ-ÖØ-öø-ÿ\s.,'-]+$/.test(formData.author)) {
       setError("Author name must contain only letters and valid punctuation.")
+      toast.error("Invalid author name format")
       return false
     }
 
     if (!/^[0-9\-]+$/.test(formData.isbn)) {
       setError("ISBN must contain only numbers and hyphens.")
+      toast.error("Invalid ISBN format")
       return false
     }
 
     if (formData.isbn.length < 10 || formData.isbn.length > 17) {
       setError("ISBN should be between 10 to 17 characters long.")
+      toast.error("ISBN length invalid")
       return false
     }
 
@@ -100,55 +107,92 @@ export default function AddBookPage() {
     if (!validateForm()) return
     setIsLoading(true)
 
-    try {
-      const userId = currentUser?.id || parseInt(localStorage.getItem("userId") || "0")
-      if (!userId) {
-        setError("User not authenticated. Please log in again.")
-        return
+    const addBookPromise = async () => {
+      try {
+        const userId = currentUser?.id || parseInt(localStorage.getItem("userId") || "0")
+        if (!userId) {
+          throw new Error("User not authenticated. Please log in again.")
+        }
+
+        // ✅ Check for duplicate ISBN before inserting
+        const { data: existingBook, error: isbnError } = await supabase
+          .from("books")
+          .select("isbn")
+          .eq("isbn", formData.isbn)
+          .maybeSingle()
+
+        if (isbnError) throw isbnError
+        if (existingBook) {
+          throw new Error("A book with this ISBN already exists.")
+        }
+
+        // ✅ Insert book
+        const bookData = { ...formData, added_by: userId }
+        const { data: newBook, error: bookError } = await supabase
+          .from("books")
+          .insert([bookData])
+          .select()
+          .single()
+
+        if (bookError) throw bookError
+
+        // ✅ Audit log
+        await supabase.from("audit_logs").insert([
+          {
+            action: "CREATE_BOOK",
+            table_name: "books",
+            record_id: newBook.id,
+            user_id: userId,
+            new_data: newBook,
+            created_at: new Date().toISOString(),
+          },
+        ])
+
+        // Show success message
+        toast.success(`"${formData.title}" added successfully!`, {
+          description: `By ${formData.author} • ${formData.category}`,
+          action: {
+            label: "View Books",
+            onClick: () => router.push("/books"),
+          },
+        })
+
+        // Reset form
+        setFormData({
+          title: "",
+          author: "",
+          isbn: "",
+          category: "",
+          status: "available",
+        })
+
+        // Navigate to books page after a short delay
+        setTimeout(() => {
+          router.push("/books")
+        }, 1500)
+
+        return newBook
+      } catch (err: any) {
+        console.error("❌ Error adding book:", err)
+        throw err
       }
-
-      // ✅ Check for duplicate ISBN before inserting
-      const { data: existingBook, error: isbnError } = await supabase
-        .from("books")
-        .select("isbn")
-        .eq("isbn", formData.isbn)
-        .maybeSingle()
-
-      if (isbnError) throw isbnError
-      if (existingBook) {
-        setError("A book with this ISBN already exists.")
-        return
-      }
-
-      // ✅ Insert book
-      const bookData = { ...formData, added_by: userId }
-      const { data: newBook, error: bookError } = await supabase
-        .from("books")
-        .insert([bookData])
-        .select()
-        .single()
-
-      if (bookError) throw bookError
-
-      // ✅ Audit log
-      await supabase.from("audit_logs").insert([
-        {
-          action: "CREATE_BOOK",
-          table_name: "books",
-          record_id: newBook.id,
-          user_id: userId,
-          new_data: newBook,
-          created_at: new Date().toISOString(),
-        },
-      ])
-
-      router.push("/books")
-    } catch (err: any) {
-      console.error("❌ Error adding book:", err)
-      setError(err.message || "Failed to add book. Please try again.")
-    } finally {
-      setIsLoading(false)
     }
+
+    // Use Sonner's promise-based toast for the loading state
+    toast.promise(addBookPromise(), {
+      loading: 'Adding book to library...',
+      success: (data) => {
+        return `"${formData.title}" has been added successfully!`
+      },
+      error: (err) => {
+        const errorMessage = err.message || "Failed to add book. Please try again."
+        setError(errorMessage)
+        return errorMessage
+      },
+      finally: () => {
+        setIsLoading(false)
+      }
+    })
   }
 
   return (
@@ -282,7 +326,16 @@ export default function AddBookPage() {
 
                   {/* Actions */}
                   <div className="flex flex-col sm:flex-row gap-4 pt-4 border-t border-border/30">
-                    <Button type="submit" disabled={isLoading} className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white">
+                    <Button 
+                      type="submit" 
+                      disabled={isLoading} 
+                      className={cn(
+                        "flex-1 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700",
+                        "text-white shadow-lg shadow-indigo-500/25 hover:shadow-indigo-500/40",
+                        "transition-all duration-300 transform hover:scale-[1.02]",
+                        "border-0 h-11"
+                      )}
+                    >
                       {isLoading ? (
                         <>
                           <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Adding...
@@ -294,7 +347,11 @@ export default function AddBookPage() {
                       )}
                     </Button>
                     <Link href="/books" className="flex-1">
-                      <Button type="button" variant="outline" className="w-full">
+                      <Button 
+                        type="button" 
+                        variant="outline" 
+                        className="w-full h-11 backdrop-blur-sm border-border/50 hover:bg-muted/30"
+                      >
                         Cancel
                       </Button>
                     </Link>

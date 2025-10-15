@@ -14,6 +14,7 @@ import { ArrowLeft, Save, Trash2, BookOpen, User, Hash, Tag, Loader2 } from "luc
 import Link from "next/link"
 import { createClient } from "@supabase/supabase-js"
 import { cn } from "@/lib/utils"
+import { toast } from "sonner"
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -44,6 +45,7 @@ export default function EditBookPage() {
         const { data, error } = await supabase.from("books").select("*").eq("id", bookId).single()
         if (error || !data) {
           setError("Book not found.")
+          toast.error("Book not found")
         } else {
           setFormData({
             title: data.title,
@@ -52,9 +54,11 @@ export default function EditBookPage() {
             category: data.category,
             status: data.status,
           })
+          toast.success("Book data loaded successfully")
         }
       } catch {
         setError("Failed to fetch book data.")
+        toast.error("Failed to load book data")
       } finally {
         setIsLoading(false)
       }
@@ -75,6 +79,7 @@ export default function EditBookPage() {
     // Validate required fields
     if (!formData.title || !formData.author || !formData.isbn || !formData.category) {
       setError("Please fill in all required fields.")
+      toast.error("Please fill in all required fields")
       setIsLoading(false)
       return
     }
@@ -83,6 +88,7 @@ export default function EditBookPage() {
     const isbnPattern = /^(97(8|9))?\d{9}(\d|X)$/
     if (!isbnPattern.test(formData.isbn.replace(/[-\s]/g, ""))) {
       setError("Invalid ISBN format. Example: 978-0-123456-47-2")
+      toast.error("Invalid ISBN format")
       setIsLoading(false)
       return
     }
@@ -98,6 +104,7 @@ export default function EditBookPage() {
 
       if (duplicate) {
         setError("Another book already uses this ISBN. Please use a unique one.")
+        toast.error("ISBN already exists")
         setIsLoading(false)
         return
       }
@@ -110,11 +117,14 @@ export default function EditBookPage() {
 
       if (updateError) {
         setError("Failed to update book. Please try again.")
+        toast.error("Failed to update book")
       } else {
+        toast.success("Book updated successfully!")
         router.push("/books")
       }
     } catch {
       setError("An unexpected error occurred. Please try again.")
+      toast.error("An unexpected error occurred")
     } finally {
       setIsLoading(false)
     }
@@ -122,20 +132,61 @@ export default function EditBookPage() {
 
   // Soft Delete (Archive)
   const handleArchive = async () => {
-    if (!bookId || !confirm("Are you sure you want to archive this book?")) return
+    if (!bookId) return
+    
+    toast.custom((t) => (
+      <div className="bg-white border border-border rounded-lg shadow-lg p-4 max-w-sm">
+        <div className="flex flex-col space-y-3">
+          <h4 className="font-semibold text-foreground">Archive Book</h4>
+          <p className="text-sm text-muted-foreground">
+            Are you sure you want to archive this book? This action can be undone.
+          </p>
+          <div className="flex justify-end space-x-2 pt-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => toast.dismiss(t)}
+              className="h-9"
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              size="sm"
+              onClick={async () => {
+                toast.dismiss(t)
+                await performArchive()
+              }}
+              className="h-9"
+            >
+              Archive
+            </Button>
+          </div>
+        </div>
+      </div>
+    ))
+  }
+
+  const performArchive = async () => {
+    if (!bookId) return
+    
     setIsLoading(true)
     try {
       const { error } = await supabase
         .from("books")
         .update({ status: "archived" })
         .eq("id", bookId)
+      
       if (error) {
         setError("Failed to archive book. Please try again.")
+        toast.error("Failed to archive book")
       } else {
+        toast.success("Book archived successfully!")
         router.push("/books")
       }
     } catch {
       setError("Failed to archive book. Please try again.")
+      toast.error("Failed to archive book")
     } finally {
       setIsLoading(false)
     }
