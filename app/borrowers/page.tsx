@@ -381,7 +381,7 @@ export default function BorrowersPage() {
             {/* Header */}
             <div className="mb-4">
               <h1 className="text-3xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">
-                Patrons
+                Borrowers
               </h1>
               <p className="text-muted-foreground">Manage library patrons and track borrowed books</p>
             </div>
@@ -394,26 +394,30 @@ export default function BorrowersPage() {
                 </CardTitle>
                 <CardDescription>Find patrons and track their loans</CardDescription>
               </CardHeader>
+
               <CardContent>
-                <div className="flex flex-col sm:flex-row gap-4">
-                  <div className="flex-1 relative">
+                <div className="flex flex-col sm:flex-row items-center sm:items-end gap-4">
+                  {/* Search Input */}
+                  <div className="flex-1 relative w-full">
                     <div className="absolute left-3 top-1/2 transform -translate-y-1/2">
                       <Search className="h-5 w-5 text-indigo-600" />
                     </div>
                     <Input
                       placeholder="Search by name, email, or phone..."
                       value={searchTerm}
-                      onChange={e => setSearchTerm(e.target.value)}
-                      className="pl-11 bg-background/50 border-border/50 focus:border-indigo-300 transition-colors h-11"
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                      className="pl-11 bg-background/50 border-border/50 focus:border-indigo-300 transition-colors h-11 w-full"
                     />
                   </div>
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium text-foreground/80 flex items-center gap-2">
+
+                  {/* Filter Dropdown */}
+                  <div className="flex flex-col w-full sm:w-56">
+                    <label className="text-sm font-medium text-foreground/80 mb-1 flex items-center gap-2">
                       <Filter className="h-4 w-4 text-indigo-600" />
                       Status
                     </label>
                     <Select value={statusFilter} onValueChange={setStatusFilter}>
-                      <SelectTrigger className="w-full sm:w-48 bg-background/50 border-border/50 h-11">
+                      <SelectTrigger className="w-full bg-background/50 border-border/50 h-11">
                         <SelectValue placeholder="Filter by status" />
                       </SelectTrigger>
                       <SelectContent>
