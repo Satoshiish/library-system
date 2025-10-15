@@ -49,6 +49,17 @@ export default function BooksPage() {
     return descriptions[status] || "Unknown status"
   }
 
+  // Helper function to format user role display
+  const formatUserRole = (role: string) => {
+    const roleMap: { [key: string]: string } = {
+      admin: "Admin",
+      librarian: "Librarian",
+      user: "User",
+      member: "Member",
+    }
+    return roleMap[role] || role
+  }
+
   // ✅ IMPROVED: Fetch books with reliable status checking
   const fetchBooks = async () => {
     setLoading(true)
@@ -514,19 +525,20 @@ export default function BooksPage() {
                       >
                         <CardContent className="p-4">
                           <div className="space-y-3">
+                            {/* Title and Status Row */}
                             <div className="flex items-start justify-between gap-3">
                               <div className="flex-1 min-w-0">
-                                <h3 className="font-semibold text-base sm:text-lg leading-tight text-foreground">
+                                <h3 className="font-semibold text-base sm:text-lg leading-tight text-foreground line-clamp-2 break-words">
                                   {book.title}
                                 </h3>
                                 <p className="text-sm text-muted-foreground flex items-center gap-1 mt-1">
                                   <User className="h-3 w-3 flex-shrink-0 text-indigo-600" />
-                                  <span>{book.author}</span>
+                                  <span className="truncate">{book.author}</span>
                                 </p>
                               </div>
                               <Badge 
                                 className={cn(
-                                  "flex-shrink-0 text-xs border backdrop-blur-sm cursor-help",
+                                  "flex-shrink-0 text-xs border backdrop-blur-sm cursor-help whitespace-nowrap",
                                   statusColors[book.status] || "bg-gray-100 text-gray-800 border-gray-200"
                                 )}
                                 title={getStatusDescription(book.status)}
@@ -537,34 +549,34 @@ export default function BooksPage() {
 
                             {/* Book Details */}
                             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-sm">
-                              <div className="flex items-center gap-2">
+                              <div className="flex items-center gap-2 min-w-0">
                                 <Book className="h-3 w-3 text-indigo-600 flex-shrink-0" />
-                                <span className="text-muted-foreground">ISBN:</span>
-                                <span className="font-mono text-xs break-all bg-muted/50 px-2 py-1 rounded">
+                                <span className="text-muted-foreground whitespace-nowrap">ISBN:</span>
+                                <span className="font-mono text-xs break-all bg-muted/50 px-2 py-1 rounded truncate min-w-0">
                                   {book.isbn}
                                 </span>
                               </div>
-                              <div className="flex items-center gap-2">
-                                <span className="text-muted-foreground">Category:</span>
-                                <Badge variant="outline" className="text-xs backdrop-blur-sm">
+                              <div className="flex items-center gap-2 min-w-0">
+                                <span className="text-muted-foreground whitespace-nowrap">Category:</span>
+                                <Badge variant="outline" className="text-xs backdrop-blur-sm truncate max-w-[120px]">
                                   {book.category || "Uncategorized"}
                                 </Badge>
                               </div>
-                              <div className="flex items-center gap-2">
+                              <div className="flex items-center gap-2 min-w-0">
                                 <Calendar className="h-3 w-3 text-indigo-600 flex-shrink-0" />
-                                <span className="text-muted-foreground">Added:</span>
-                                <span>{new Date(book.created_at).toLocaleDateString()}</span>
+                                <span className="text-muted-foreground whitespace-nowrap">Added:</span>
+                                <span className="whitespace-nowrap">{new Date(book.created_at).toLocaleDateString()}</span>
                               </div>
-                              <div className="flex items-center gap-2">
+                              <div className="flex items-center gap-2 min-w-0">
                                 <User className="h-3 w-3 text-indigo-600 flex-shrink-0" />
-                                <span className="text-muted-foreground">Added by:</span>
-                                <div className="flex items-center gap-1">
-                                  <span className="font-medium text-sm">
+                                <span className="text-muted-foreground whitespace-nowrap">Added by:</span>
+                                <div className="flex items-center gap-1 min-w-0">
+                                  <span className="font-medium text-sm truncate max-w-[100px]">
                                     {book.added_by_user?.email || "Unknown"}
                                   </span>
                                   {book.added_by_user?.role && (
-                                    <Badge variant="outline" className="text-xs capitalize backdrop-blur-sm">
-                                      {book.added_by_user.role}
+                                    <Badge variant="outline" className="text-xs capitalize backdrop-blur-sm whitespace-nowrap">
+                                      {formatUserRole(book.added_by_user.role)}
                                     </Badge>
                                   )}
                                 </div>
@@ -620,50 +632,50 @@ export default function BooksPage() {
 
         {/* View Details Modal */}
         {viewingBook && (
-          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50">
-            <div className="backdrop-blur-xl border-border/30 bg-gradient-to-b from-background/95 to-background/90 p-6 rounded-lg w-96 relative shadow-2xl shadow-indigo-500/10">
+          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+            <div className="backdrop-blur-xl border-border/30 bg-gradient-to-b from-background/95 to-background/90 p-6 rounded-lg w-full max-w-md relative shadow-2xl shadow-indigo-500/10">
               <button
                 className="absolute top-2 right-2 text-muted-foreground hover:text-foreground transition-colors"
                 onClick={() => setViewingBook(null)}
               >
                 <X className="h-5 w-5" />
               </button>
-              <h3 className="text-lg font-semibold mb-4 bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">
+              <h3 className="text-lg font-semibold mb-4 bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent break-words">
                 {viewingBook.title}
               </h3>
               <div className="space-y-3 text-sm">
                 <div className="flex justify-between items-center p-2 bg-muted/30 rounded">
-                  <strong>Author:</strong> 
-                  <span>{viewingBook.author}</span>
+                  <strong className="whitespace-nowrap">Author:</strong> 
+                  <span className="text-right break-words ml-2">{viewingBook.author}</span>
                 </div>
                 <div className="flex justify-between items-center p-2 bg-muted/30 rounded">
-                  <strong>ISBN:</strong> 
-                  <span className="font-mono">{viewingBook.isbn}</span>
+                  <strong className="whitespace-nowrap">ISBN:</strong> 
+                  <span className="font-mono text-right break-all ml-2">{viewingBook.isbn}</span>
                 </div>
                 <div className="flex justify-between items-center p-2 bg-muted/30 rounded">
-                  <strong>Category:</strong> 
-                  <span>{viewingBook.category || "Uncategorized"}</span>
+                  <strong className="whitespace-nowrap">Category:</strong> 
+                  <span className="text-right break-words ml-2">{viewingBook.category || "Uncategorized"}</span>
                 </div>
                 <div className="flex justify-between items-center p-2 bg-muted/30 rounded">
-                  <strong>Status:</strong> 
+                  <strong className="whitespace-nowrap">Status:</strong> 
                   <Badge 
-                    className={cn("text-xs", statusColors[viewingBook.status])}
+                    className={cn("text-xs whitespace-nowrap", statusColors[viewingBook.status])}
                     title={getStatusDescription(viewingBook.status)}
                   >
                     {viewingBook.status.replace("_", " ").toUpperCase()}
                   </Badge>
                 </div>
                 <div className="flex justify-between items-center p-2 bg-muted/30 rounded">
-                  <strong>Added:</strong> 
-                  <span>{new Date(viewingBook.created_at).toLocaleDateString()}</span>
+                  <strong className="whitespace-nowrap">Added:</strong> 
+                  <span className="text-right whitespace-nowrap ml-2">{new Date(viewingBook.created_at).toLocaleDateString()}</span>
                 </div>
-                <div className="flex justify-between items-center p-2 bg-muted/30 rounded">
-                  <strong>Added by:</strong> 
-                  <div className="text-right">
-                    <div>{viewingBook.added_by_user?.email || "Unknown"}</div>
+                <div className="flex justify-between items-start p-2 bg-muted/30 rounded">
+                  <strong className="whitespace-nowrap">Added by:</strong> 
+                  <div className="text-right ml-2">
+                    <div className="break-words">{viewingBook.added_by_user?.email || "Unknown"}</div>
                     {viewingBook.added_by_user?.role && (
-                      <Badge variant="outline" className="text-xs capitalize mt-1 backdrop-blur-sm">
-                        {viewingBook.added_by_user.role}
+                      <Badge variant="outline" className="text-xs capitalize mt-1 backdrop-blur-sm whitespace-nowrap">
+                        {formatUserRole(viewingBook.added_by_user.role)}
                       </Badge>
                     )}
                   </div>
@@ -683,8 +695,8 @@ export default function BooksPage() {
 
         {/* Delete Confirmation Modal */}
         {deleteModalOpen && (
-          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50">
-            <div className="backdrop-blur-xl border-border/30 bg-gradient-to-b from-background/95 to-background/90 p-6 rounded-lg w-96 relative shadow-2xl shadow-indigo-500/10">
+          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+            <div className="backdrop-blur-xl border-border/30 bg-gradient-to-b from-background/95 to-background/90 p-6 rounded-lg w-full max-w-md relative shadow-2xl shadow-indigo-500/10">
               <button
                 className="absolute top-2 right-2 text-muted-foreground hover:text-foreground transition-colors"
                 onClick={closeDeleteModal}
@@ -692,14 +704,14 @@ export default function BooksPage() {
                 <X className="h-5 w-5" />
               </button>
               <h3 className="text-lg font-semibold mb-2 text-destructive">Delete Book</h3>
-              <p className="text-sm text-muted-foreground mb-4">
+              <p className="text-sm text-muted-foreground mb-4 break-words">
                 Are you sure you want to delete "<strong>{bookToDelete?.title}</strong>" by {bookToDelete?.author}?
                 This action cannot be undone.
               </p>
               
               {deleteError && (
                 <div className="bg-destructive/10 border border-destructive/20 rounded p-3 mb-4 backdrop-blur-sm">
-                  <p className="text-destructive text-sm">{deleteError}</p>
+                  <p className="text-destructive text-sm break-words">{deleteError}</p>
                 </div>
               )}
 

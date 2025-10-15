@@ -644,8 +644,9 @@ export default function TransactionsPage() {
         setTransactions(prev => [loanData, ...prev])
       }
 
-      // Reset form but KEEP modal open for multiple transactions
+      // Reset form and refresh books data
       resetNewLoanForm()
+      setAddTransactionModalOpen(false)
 
       // Update local books state
       setBooks(prev => {
@@ -657,7 +658,7 @@ export default function TransactionsPage() {
         return updatedBooks;
       })
 
-      toast.success("Transaction added successfully! ✅ You can add another transaction or close the modal.")
+      toast.success("Transaction added successfully ✅")
     } catch (error) {
       console.error("❌ Error adding transaction:", error)
       toast.error("Failed to add transaction")
@@ -1728,7 +1729,7 @@ export default function TransactionsPage() {
                     disabled={submitting}
                     className="backdrop-blur-sm border-border/50"
                   >
-                    Close
+                    Cancel
                   </Button>
                   <Button
                     type="submit"
@@ -1752,13 +1753,6 @@ export default function TransactionsPage() {
                       </>
                     )}
                   </Button>
-                </div>
-
-                {/* Success Message */}
-                <div className="text-center">
-                  <p className="text-sm text-muted-foreground">
-                    After adding a transaction, the form will reset so you can add another one.
-                  </p>
                 </div>
               </form>
             </div>
