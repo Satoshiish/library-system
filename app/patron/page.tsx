@@ -56,18 +56,47 @@ export default function PatronPage() {
     setLoading(false)
   }
 
-  // Validate phone number (only numbers)
+  // Validate phone number (only numbers and max 11 digits for Philippine numbers)
   const validatePhoneNumber = (phone: string) => {
     if (!phone) return true // Empty is allowed
-    const phoneRegex = /^[0-9+\-\s()]*$/ // Only numbers and common phone symbols
-    return phoneRegex.test(phone)
+    
+    // Remove all non-digit characters for validation
+    const digitsOnly = phone.replace(/\D/g, '')
+    
+    // Check if it contains only numbers and common phone symbols
+    const phoneRegex = /^[0-9+\-\s()]*$/
+    if (!phoneRegex.test(phone)) {
+      return false
+    }
+    
+    // Check if it exceeds 11 digits (Philippine standard)
+    if (digitsOnly.length > 11) {
+      return false
+    }
+    
+    return true
   }
 
-  // Format phone number input
+  // Format phone number input with max 11 digits
   const handlePhoneInput = (value: string) => {
     // Remove any non-numeric characters except +, -, (, )
-    const cleaned = value.replace(/[^\d+\-()\s]/g, '')
+    let cleaned = value.replace(/[^\d+\-()\s]/g, '')
+    
+    // Remove all non-digit characters to check length
+    const digitsOnly = cleaned.replace(/\D/g, '')
+    
+    // Limit to 11 digits for Philippine phone numbers
+    if (digitsOnly.length > 11) {
+      // If exceeds 11 digits, truncate to 11 digits
+      cleaned = cleaned.slice(0, cleaned.length - (digitsOnly.length - 11))
+    }
+    
     return cleaned
+  }
+
+  // Get digit count for validation messages
+  const getDigitCount = (phone: string) => {
+    return phone.replace(/\D/g, '').length
   }
 
   // Add new patron
@@ -87,7 +116,12 @@ export default function PatronPage() {
 
     // Validate phone number
     if (newPatron.phone && !validatePhoneNumber(newPatron.phone)) {
-      toast.error("Invalid phone number. Please use numbers only with optional +, -, (, )")
+      const digitCount = getDigitCount(newPatron.phone)
+      if (digitCount > 11) {
+        toast.error("Phone number cannot exceed 11 digits (Philippine standard)")
+      } else {
+        toast.error("Invalid phone number. Please use numbers only with optional +, -, (, )")
+      }
       return
     }
 
@@ -249,7 +283,12 @@ export default function PatronPage() {
 
     // Validate phone number
     if (editingPatron.phone && !validatePhoneNumber(editingPatron.phone)) {
-      toast.error("Invalid phone number. Please use numbers only with optional +, -, (, )")
+      const digitCount = getDigitCount(editingPatron.phone)
+      if (digitCount > 11) {
+        toast.error("Phone number cannot exceed 11 digits (Philippine standard)")
+      } else {
+        toast.error("Invalid phone number. Please use numbers only with optional +, -, (, )")
+      }
       return
     }
 
@@ -405,26 +444,44 @@ export default function PatronPage() {
                         />
                       </div>
                       <div className="space-y-3">
-                        <Label htmlFor="phone" className="text-sm font-medium text-foreground/80">Phone</Label>
+                        <Label htmlFor="phone" className="text-sm font-medium text-foreground/80">
+                          Phone 
+                          {newPatron.phone && (
+                            <span className={cn(
+                              "ml-2 text-xs",
+                              getDigitCount(newPatron.phone) > 11 ? "text-red-600 font-medium" : "text-muted-foreground"
+                            )}>
+                              ({getDigitCount(newPatron.phone)}/11 digits)
+                            </span>
+                          )}
+                        </Label>
                         <Input
                           id="phone"
                           value={newPatron.phone}
                           onChange={e => setNewPatron({ ...newPatron, phone: handlePhoneInput(e.target.value) })}
-                          placeholder="123-456-7890"
-                          className="bg-background/50 border-border/50 focus:border-indigo-300 transition-colors h-11"
+                          placeholder="09XXXXXXXXX"
+                          className={cn(
+                            "bg-background/50 border-border/50 focus:border-indigo-300 transition-colors h-11",
+                            newPatron.phone && getDigitCount(newPatron.phone) > 11 && "border-red-300 focus:border-red-300"
+                          )}
+                          maxLength={15} // Allow for formatting characters
                         />
+                        <p className="text-xs text-muted-foreground">
+                          Philippine format (max 11 digits) - e.g., 09171234567
+                        </p>
                       </div>
                     </div>
 
                     <div className="flex justify-end">
                       <Button 
                         type="submit" 
-                        disabled={submitting}
+                        disabled={submitting || (newPatron.phone && getDigitCount(newPatron.phone) > 11)}
                         className={cn(
                           "bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700",
                           "text-white shadow-lg shadow-indigo-500/25 hover:shadow-indigo-500/40",
                           "transition-all duration-300 transform hover:scale-[1.02]",
-                          "border-0 h-11"
+                          "border-0 h-11",
+                          (newPatron.phone && getDigitCount(newPatron.phone) > 11) && "opacity-50 cursor-not-allowed"
                         )}
                       >
                         {submitting ? (
@@ -557,12 +614,26 @@ export default function PatronPage() {
                             </td>
                             <td className="p-4">
                               {editingPatron?.id === p.id ? (
-                                <Input
-                                  value={editingPatron.phone || ""}
-                                  onChange={e => setEditingPatron({ ...editingPatron, phone: handlePhoneInput(e.target.value) })}
-                                  placeholder="123-456-7890"
-                                  className="bg-background/50 border-border/50 h-9"
-                                />
+                                <div className="space-y-1">
+                                  <Input
+                                    value={editingPatron.phone || ""}
+                                    onChange={e => setEditingPatron({ ...editingPatron, phone: handlePhoneInput(e.target.value) })}
+                                    placeholder="09XXXXXXXXX"
+                                    className={cn(
+                                      "bg-background/50 border-border/50 h-9",
+                                      editingPatron.phone && getDigitCount(editingPatron.phone) > 11 && "border-red-300"
+                                    )}
+                                    maxLength={15}
+                                  />
+                                  {editingPatron.phone && (
+                                    <div className={cn(
+                                      "text-xs",
+                                      getDigitCount(editingPatron.phone) > 11 ? "text-red-600 font-medium" : "text-muted-foreground"
+                                    )}>
+                                      {getDigitCount(editingPatron.phone)}/11 digits
+                                    </div>
+                                  )}
+                                </div>
                               ) : (
                                 <div className="flex items-center gap-2">
                                   <Phone className="h-4 w-4 text-indigo-600" />
@@ -613,7 +684,7 @@ export default function PatronPage() {
                                   <Button 
                                     size="sm" 
                                     onClick={handleSaveEdit}
-                                    disabled={submitting}
+                                    disabled={submitting || (editingPatron.phone && getDigitCount(editingPatron.phone) > 11)}
                                     className="bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white border-0"
                                   >
                                     {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
