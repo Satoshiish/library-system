@@ -11,7 +11,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { toast } from "sonner"
-import { Search, Calendar, User, Book, ArrowUpDown, AlertTriangle, Clock, Plus, Loader2, Filter, History, Activity, Mail, Phone, RefreshCw, Hash } from "lucide-react"
+import { Search, Calendar, User, Book, ArrowUpDown, AlertTriangle, Clock, Plus, Loader2, Filter, History, Activity, Mail, Phone, RefreshCw, Hash, X } from "lucide-react"
 import emailjs from "@emailjs/browser"
 import { cn } from "@/lib/utils"
 import { AuthGuard } from "@/components/auth-guard"
@@ -63,6 +63,7 @@ export default function TransactionsPage() {
   const [sortConfig, setSortConfig] = useState({ key: "due_date", direction: "asc" })
   const [submitting, setSubmitting] = useState(false)
   const [activeTab, setActiveTab] = useState("active")
+  const [addTransactionModalOpen, setAddTransactionModalOpen] = useState(false)
 
   // Fetch data with proper error handling
   useEffect(() => {
@@ -222,6 +223,11 @@ export default function TransactionsPage() {
       loansSubscription.unsubscribe()
     }
   }, [])
+
+  // Reset new loan form
+  const resetNewLoanForm = () => {
+    setNewLoan({ patron_id: "", book_id: "", due_date: "" })
+  }
 
   // Refresh function
   const fetchData = async () => {
@@ -639,7 +645,8 @@ export default function TransactionsPage() {
       }
 
       // Reset form and refresh books data
-      setNewLoan({ patron_id: "", book_id: "", due_date: "" })
+      resetNewLoanForm()
+      setAddTransactionModalOpen(false)
 
       // Update local books state
       setBooks(prev => {
@@ -774,7 +781,7 @@ export default function TransactionsPage() {
                   Refresh
                 </Button>
                 <Button 
-                  onClick={() => setActiveTab("new")}
+                  onClick={() => setAddTransactionModalOpen(true)}
                   size="sm"
                   className={cn(
                     "bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700",
@@ -869,7 +876,7 @@ export default function TransactionsPage() {
             )}
 
             <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-              <TabsList className="grid w-full grid-cols-2 lg:grid-cols-4 backdrop-blur-sm bg-background/50 border-border/30">
+              <TabsList className="grid w-full grid-cols-3 backdrop-blur-sm bg-background/50 border-border/30">
                 <TabsTrigger 
                   value="active" 
                   className="flex items-center gap-2 data-[state=active]:bg-gradient-to-r data-[state=active]:from-indigo-500 data-[state=active]:to-purple-500 data-[state=active]:text-white"
@@ -896,253 +903,7 @@ export default function TransactionsPage() {
                   <History className="h-4 w-4" />
                   History
                 </TabsTrigger>
-                <TabsTrigger 
-                  value="new"
-                  className="flex items-center gap-2 data-[state=active]:bg-gradient-to-r data-[state=active]:from-indigo-500 data-[state=active]:to-purple-500 data-[state=active]:text-white"
-                >
-                  <Plus className="h-4 w-4" />
-                  New
-                </TabsTrigger>
               </TabsList>
-
-              {/* New Transaction Tab */}
-              <TabsContent value="new" className="space-y-6">
-                <Card className="backdrop-blur-xl border-border/30 bg-gradient-to-b from-background/95 to-background/90 shadow-lg shadow-indigo-500/10">
-                  <CardHeader>
-                    <CardTitle className="bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">
-                      Add New Transaction
-                    </CardTitle>
-                    <CardDescription>
-                      Create a new book loan transaction.{" "}
-                      {borrowers.length > 0
-                        ? `Showing ${borrowers.length} active patrons only.`
-                        : "No active patrons found."}{" "}
-                      Inactive and archived patrons cannot borrow books.
-                    </CardDescription>
-                  </CardHeader>
-
-                  <CardContent>
-                    <form onSubmit={handleAddTransaction} className="space-y-6">
-                      <div className="grid gap-6 md:grid-cols-3">
-                        
-                        {/* Patron Select */}
-                        <div className="space-y-3">
-                          <Label htmlFor="borrower" className="text-sm font-medium text-foreground/80">
-                            Patron {borrowers.length > 0 && `(${borrowers.length} active)`}
-                          </Label>
-
-                          <Select
-                            value={newLoan.patron_id}
-                            onValueChange={(val) => setNewLoan({ ...newLoan, patron_id: val })}
-                          >
-                            <SelectTrigger className="bg-background/50 border-border/50 h-11">
-                              <SelectValue
-                                placeholder={
-                                  borrowers.length > 0
-                                    ? "Select active patron"
-                                    : "No active patrons available"
-                                }
-                              />
-                            </SelectTrigger>
-
-                            <SelectContent className="max-h-60 overflow-y-auto">
-                              {borrowers.length > 0 ? (
-                                borrowers.map((b) => (
-                                  <SelectItem
-                                    key={b.id}
-                                    value={b.id}
-                                    className="py-2 px-3 flex items-center justify-between hover:bg-indigo-50 dark:hover:bg-indigo-950/40 transition-colors rounded-md"
-                                  >
-                                    <span className="font-medium text-sm text-foreground">
-                                      {b.full_name}
-                                    </span>
-                                    <Badge
-                                      variant="default"
-                                      className="text-xs bg-green-100 text-green-800 border-green-200"
-                                    >
-                                      Active
-                                    </Badge>
-                                  </SelectItem>
-                                ))
-                              ) : (
-                                <SelectItem value="no-patrons" disabled>
-                                  No active patrons available
-                                </SelectItem>
-                              )}
-                            </SelectContent>
-                          </Select>
-
-                          {/* ✅ Selected Patron Info */}
-                          {newLoan.patron_id && (() => {
-                            const selected = borrowers.find((b) => b.id === newLoan.patron_id);
-                            if (!selected) return null;
-                            return (
-                              <div className="mt-2 rounded-lg border border-border/40 p-3 bg-background/30 backdrop-blur-sm">
-                                <div className="flex items-center justify-between mb-1">
-                                  <span className="font-medium text-sm">{selected.full_name}</span>
-                                  <Badge
-                                    variant="default"
-                                    className="text-xs bg-green-100 text-green-800 border-green-200"
-                                  >
-                                    Active
-                                  </Badge>
-                                </div>
-                                {selected.email && (
-                                  <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                                    <Mail className="h-3 w-3" /> {selected.email}
-                                  </div>
-                                )}
-                                {selected.phone && (
-                                  <div className="flex items-center gap-1 text-xs text-muted-foreground mt-1">
-                                    <Phone className="h-3 w-3" /> {selected.phone}
-                                  </div>
-                                )}
-                              </div>
-                            );
-                          })()}
-
-                          {/* Footer Info */}
-                          {borrowers.length > 0 && (
-                            <div className="flex flex-wrap gap-2 text-xs text-muted-foreground mt-1">
-                              <span className="text-green-600 font-medium">
-                                Active: {borrowers.length}
-                              </span>
-                              <span>•</span>
-                              <span>Only active patrons can borrow books</span>
-                            </div>
-                          )}
-                        </div>
-
-                        {/* Book Select */}
-                        <div className="space-y-3">
-                          <Label htmlFor="book" className="text-sm font-medium text-foreground/80">
-                            Book
-                          </Label>
-
-                          <Select
-                            value={newLoan.book_id}
-                            onValueChange={(val) => setNewLoan({ ...newLoan, book_id: val })}
-                          >
-                            <SelectTrigger className="bg-background/50 border-border/50 h-11">
-                              <SelectValue
-                                placeholder={
-                                  books.filter((book) => book.status === "available").length > 0
-                                    ? "Select available book"
-                                    : "No available books"
-                                }
-                              />
-                            </SelectTrigger>
-
-                            <SelectContent className="max-h-60 overflow-y-auto">
-                              {books.filter((book) => book.status === "available").length > 0 ? (
-                                books
-                                  .filter((book) => book.status === "available")
-                                  .map((b) => (
-                                    <SelectItem
-                                      key={b.id}
-                                      value={b.id}
-                                      className="py-2 px-3 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 transition-colors rounded-md"
-                                    >
-                                      <span className="font-medium text-sm">{b.title}</span>
-                                    </SelectItem>
-                                  ))
-                              ) : (
-                                <SelectItem value="no-books" disabled>
-                                  No available books
-                                </SelectItem>
-                              )}
-                            </SelectContent>
-                          </Select>
-
-                          {/* ✅ Show selected book info below dropdown */}
-                          {newLoan.book_id && (
-                            (() => {
-                              const selected = books.find((b) => b.id === newLoan.book_id);
-                              if (!selected) return null;
-                              return (
-                                <div className="mt-2 rounded-lg border border-border/40 p-3 bg-background/30 backdrop-blur-sm">
-                                  <div className="flex items-center justify-between mb-1">
-                                    <span className="font-medium text-sm">{selected.title}</span>
-                                    <Badge
-                                      variant="default"
-                                      className="text-xs bg-green-100 text-green-800 border-green-200"
-                                    >
-                                      Available
-                                    </Badge>
-                                  </div>
-
-                                  {selected.author && (
-                                    <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                                      <Book className="h-3 w-3" /> {selected.author}
-                                    </div>
-                                  )}
-
-                                  {selected.isbn && (
-                                    <div className="flex items-center gap-1 text-xs text-muted-foreground mt-1">
-                                      <Hash className="h-3 w-3" /> ISBN: {selected.isbn}
-                                    </div>
-                                  )}
-                                </div>
-                              );
-                            })()
-                          )}
-
-                          {/* Footer Info */}
-                          <p className="text-xs text-muted-foreground">
-                            Showing {books.filter((b) => b.status === "available").length} available book
-                            {books.filter((b) => b.status === "available").length !== 1 ? "s" : ""}
-                          </p>
-                        </div>
-
-                        {/* Due Date Picker */}
-                        <div className="space-y-3">
-                          <Label htmlFor="due_date" className="text-sm font-medium text-foreground/80">
-                            Due Date
-                          </Label>
-                          <div className="relative">
-                            <Calendar className="absolute left-3 top-3 h-4 w-4 text-indigo-600" />
-                            <Input
-                              type="date"
-                              value={newLoan.due_date}
-                              onChange={(e) =>
-                                setNewLoan({ ...newLoan, due_date: e.target.value })
-                              }
-                              min={new Date().toISOString().split("T")[0]}
-                              className="pl-11 bg-background/50 border-border/50 focus:border-indigo-300 transition-colors h-11"
-                            />
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Submit Button */}
-                      <div className="flex justify-end">
-                        <Button
-                          type="submit"
-                          disabled={submitting || borrowers.length === 0}
-                          className={cn(
-                            "bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700",
-                            "text-white shadow-lg shadow-indigo-500/25 hover:shadow-indigo-500/40",
-                            "transition-all duration-300 transform hover:scale-[1.02]",
-                            "border-0 h-11",
-                            borrowers.length === 0 && "opacity-50 cursor-not-allowed"
-                          )}
-                        >
-                          {submitting ? (
-                            <>
-                              <Loader2 className="h-4 w-4 mr-2 animate-spin" /> Adding...
-                            </>
-                          ) : (
-                            <>
-                              <Plus className="h-4 w-4 mr-2" />{" "}
-                              {borrowers.length === 0 ? "No Active Patrons" : "Add Transaction"}
-                            </>
-                          )}
-                        </Button>
-                      </div>
-                    </form>
-                  </CardContent>
-                </Card>
-              </TabsContent>
 
               {/* Active Transactions Tab */}
               <TabsContent value="active" className="space-y-6">
@@ -1209,6 +970,13 @@ export default function TransactionsPage() {
                     <Activity className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
                     <h3 className="text-lg font-medium text-foreground mb-2">No active transactions found</h3>
                     <p className="text-muted-foreground">Try adjusting your search criteria or create a new transaction.</p>
+                    <Button 
+                      onClick={() => setAddTransactionModalOpen(true)}
+                      className="mt-4 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white"
+                    >
+                      <Plus className="h-4 w-4 mr-2" />
+                      Create First Transaction
+                    </Button>
                   </Card>
                 ) : (
                   <Card className="backdrop-blur-xl border-border/30 bg-gradient-to-b from-background/95 to-background/90 shadow-lg shadow-indigo-500/10 overflow-hidden">
@@ -1735,6 +1503,261 @@ export default function TransactionsPage() {
             </Tabs>
           </div>
         </main>
+
+        {/* Add Transaction Modal */}
+        {addTransactionModalOpen && (
+          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50">
+            <div className="backdrop-blur-xl border-border/30 bg-gradient-to-b from-background/95 to-background/90 p-6 rounded-lg w-full max-w-2xl relative shadow-2xl shadow-indigo-500/10">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-semibold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">
+                  Add New Transaction
+                </h3>
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  onClick={() => {
+                    setAddTransactionModalOpen(false)
+                    resetNewLoanForm()
+                  }}
+                  className="h-8 w-8 p-0"
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
+              
+              <form onSubmit={handleAddTransaction} className="space-y-6">
+                <div className="grid gap-6 md:grid-cols-3">
+                  
+                  {/* Patron Select */}
+                  <div className="space-y-3">
+                    <Label htmlFor="borrower" className="text-sm font-medium text-foreground/80">
+                      Patron {borrowers.length > 0 && `(${borrowers.length} active)`}
+                    </Label>
+
+                    <Select
+                      value={newLoan.patron_id}
+                      onValueChange={(val) => setNewLoan({ ...newLoan, patron_id: val })}
+                    >
+                      <SelectTrigger className="bg-background/50 border-border/50 h-11">
+                        <SelectValue
+                          placeholder={
+                            borrowers.length > 0
+                              ? "Select active patron"
+                              : "No active patrons available"
+                          }
+                        />
+                      </SelectTrigger>
+
+                      <SelectContent className="max-h-60 overflow-y-auto">
+                        {borrowers.length > 0 ? (
+                          borrowers.map((b) => (
+                            <SelectItem
+                              key={b.id}
+                              value={b.id}
+                              className="py-2 px-3 flex items-center justify-between hover:bg-indigo-50 dark:hover:bg-indigo-950/40 transition-colors rounded-md"
+                            >
+                              <span className="font-medium text-sm text-foreground">
+                                {b.full_name}
+                              </span>
+                              <Badge
+                                variant="default"
+                                className="text-xs bg-green-100 text-green-800 border-green-200"
+                              >
+                                Active
+                              </Badge>
+                            </SelectItem>
+                          ))
+                        ) : (
+                          <SelectItem value="no-patrons" disabled>
+                            No active patrons available
+                          </SelectItem>
+                        )}
+                      </SelectContent>
+                    </Select>
+
+                    {/* Selected Patron Info */}
+                    {newLoan.patron_id && (() => {
+                      const selected = borrowers.find((b) => b.id === newLoan.patron_id);
+                      if (!selected) return null;
+                      return (
+                        <div className="mt-2 rounded-lg border border-border/40 p-3 bg-background/30 backdrop-blur-sm">
+                          <div className="flex items-center justify-between mb-1">
+                            <span className="font-medium text-sm">{selected.full_name}</span>
+                            <Badge
+                              variant="default"
+                              className="text-xs bg-green-100 text-green-800 border-green-200"
+                            >
+                              Active
+                            </Badge>
+                          </div>
+                          {selected.email && (
+                            <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                              <Mail className="h-3 w-3" /> {selected.email}
+                            </div>
+                          )}
+                          {selected.phone && (
+                            <div className="flex items-center gap-1 text-xs text-muted-foreground mt-1">
+                              <Phone className="h-3 w-3" /> {selected.phone}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })()}
+
+                    {/* Footer Info */}
+                    {borrowers.length > 0 && (
+                      <div className="flex flex-wrap gap-2 text-xs text-muted-foreground mt-1">
+                        <span className="text-green-600 font-medium">
+                          Active: {borrowers.length}
+                        </span>
+                        <span>•</span>
+                        <span>Only active patrons can borrow books</span>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Book Select */}
+                  <div className="space-y-3">
+                    <Label htmlFor="book" className="text-sm font-medium text-foreground/80">
+                      Book
+                    </Label>
+
+                    <Select
+                      value={newLoan.book_id}
+                      onValueChange={(val) => setNewLoan({ ...newLoan, book_id: val })}
+                    >
+                      <SelectTrigger className="bg-background/50 border-border/50 h-11">
+                        <SelectValue
+                          placeholder={
+                            books.filter((book) => book.status === "available").length > 0
+                              ? "Select available book"
+                              : "No available books"
+                          }
+                        />
+                      </SelectTrigger>
+
+                      <SelectContent className="max-h-60 overflow-y-auto">
+                        {books.filter((book) => book.status === "available").length > 0 ? (
+                          books
+                            .filter((book) => book.status === "available")
+                            .map((b) => (
+                              <SelectItem
+                                key={b.id}
+                                value={b.id}
+                                className="py-2 px-3 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 transition-colors rounded-md"
+                              >
+                                <span className="font-medium text-sm">{b.title}</span>
+                              </SelectItem>
+                            ))
+                        ) : (
+                          <SelectItem value="no-books" disabled>
+                            No available books
+                          </SelectItem>
+                        )}
+                      </SelectContent>
+                    </Select>
+
+                    {/* Show selected book info below dropdown */}
+                    {newLoan.book_id && (
+                      (() => {
+                        const selected = books.find((b) => b.id === newLoan.book_id);
+                        if (!selected) return null;
+                        return (
+                          <div className="mt-2 rounded-lg border border-border/40 p-3 bg-background/30 backdrop-blur-sm">
+                            <div className="flex items-center justify-between mb-1">
+                              <span className="font-medium text-sm">{selected.title}</span>
+                              <Badge
+                                variant="default"
+                                className="text-xs bg-green-100 text-green-800 border-green-200"
+                              >
+                                Available
+                              </Badge>
+                            </div>
+
+                            {selected.author && (
+                              <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                                <Book className="h-3 w-3" /> {selected.author}
+                              </div>
+                            )}
+
+                            {selected.isbn && (
+                              <div className="flex items-center gap-1 text-xs text-muted-foreground mt-1">
+                                <Hash className="h-3 w-3" /> ISBN: {selected.isbn}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })()
+                    )}
+
+                    {/* Footer Info */}
+                    <p className="text-xs text-muted-foreground">
+                      Showing {books.filter((b) => b.status === "available").length} available book
+                      {books.filter((b) => b.status === "available").length !== 1 ? "s" : ""}
+                    </p>
+                  </div>
+
+                  {/* Due Date Picker */}
+                  <div className="space-y-3">
+                    <Label htmlFor="due_date" className="text-sm font-medium text-foreground/80">
+                      Due Date
+                    </Label>
+                    <div className="relative">
+                      <Calendar className="absolute left-3 top-3 h-4 w-4 text-indigo-600" />
+                      <Input
+                        type="date"
+                        value={newLoan.due_date}
+                        onChange={(e) =>
+                          setNewLoan({ ...newLoan, due_date: e.target.value })
+                        }
+                        min={new Date().toISOString().split("T")[0]}
+                        className="pl-11 bg-background/50 border-border/50 focus:border-indigo-300 transition-colors h-11"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Submit Button */}
+                <div className="flex justify-end gap-3 pt-4">
+                  <Button 
+                    type="button"
+                    variant="outline" 
+                    onClick={() => {
+                      setAddTransactionModalOpen(false)
+                      resetNewLoanForm()
+                    }}
+                    disabled={submitting}
+                    className="backdrop-blur-sm border-border/50"
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    type="submit"
+                    disabled={submitting || borrowers.length === 0}
+                    className={cn(
+                      "bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700",
+                      "text-white shadow-lg shadow-indigo-500/25 hover:shadow-indigo-500/40",
+                      "transition-all duration-300 transform hover:scale-[1.02]",
+                      "border-0 h-11",
+                      borrowers.length === 0 && "opacity-50 cursor-not-allowed"
+                    )}
+                  >
+                    {submitting ? (
+                      <>
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" /> Adding...
+                      </>
+                    ) : (
+                      <>
+                        <Plus className="h-4 w-4 mr-2" />{" "}
+                        {borrowers.length === 0 ? "No Active Patrons" : "Add Transaction"}
+                      </>
+                    )}
+                  </Button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
       </div>
     </AuthGuard>
   )
