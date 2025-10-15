@@ -11,7 +11,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { toast } from "sonner"
-import { Search, Calendar, User, Book, ArrowUpDown, AlertTriangle, Clock, Plus, Loader2, Filter, History, Activity, Mail, Phone } from "lucide-react"
+import { Search, Calendar, User, Book, ArrowUpDown, AlertTriangle, Clock, Plus, Loader2, Filter, History, Activity, Mail, Phone, RefreshCw } from "lucide-react"
 import emailjs from "@emailjs/browser"
 import { cn } from "@/lib/utils"
 import { AuthGuard } from "@/components/auth-guard"
@@ -25,9 +25,9 @@ interface Transaction {
   loan_date: string
   patron_id: string
   book_id: string
-  patrons?: { // Updated from borrowers
+  patrons?: {
     id: string
-    full_name: string // Updated from name
+    full_name: string
     email: string
     phone?: string
     status: string
@@ -37,6 +37,7 @@ interface Transaction {
     title: string
     author: string
     isbn: string
+    category: string
     status: string
   }
 }
@@ -64,15 +65,170 @@ export default function TransactionsPage() {
 
   // Fetch data with proper error handling
   useEffect(() => {
+    const fetchData = async () => {
+      try {
+        setLoading(true);
+        console.log("🔍 Starting data fetch...");
+
+        // Fetch loans (with joins), patrons, and books in parallel
+        const [
+          { data: loansData, error: loansError },
+          { data: patronsData, error: patronsError },
+          { data: booksData, error: booksError },
+        ] = await Promise.all([
+          supabase
+            .from("loans")
+            .select(`
+              id,
+              status,
+              due_date,
+              returned_date,
+              created_at,
+              loan_date,
+              patron_id,
+              book_id,
+              patrons:patrons!loans_patron_id_fkey (
+                id,
+                full_name,
+                email,
+                phone,
+                status
+              ),
+              books:books!loans_book_id_fkey (
+                id,
+                title,
+                author,
+                isbn,
+                category,
+                status
+              )
+            `)
+            .order("created_at", { ascending: false }),
+
+          supabase
+            .from("patrons")
+            .select("id, full_name, email, phone, status, member_since")
+            .order("full_name"),
+
+          supabase
+            .from("books")
+            .select("id, title, author, isbn, category, status")
+            .order("title"),
+        ]);
+
+        // Handle LOANS - FIXED: Better error handling and data enhancement
+        if (loansError) {
+          console.error("❌ Loans join error:", loansError);
+          const { data: simpleLoans, error: simpleError } = await supabase
+            .from("loans")
+            .select("*")
+            .order("created_at", { ascending: false });
+
+          if (simpleError) {
+            console.error("❌ Simple loans error:", simpleError);
+            setTransactions([]);
+          } else {
+            // Manually enhance loans with book and patron data
+            const manuallyEnhancedLoans = await Promise.all(
+              (simpleLoans || []).map(async (loan) => {
+                try {
+                  // Fetch patron data
+                  const { data: patron } = await supabase
+                    .from("patrons")
+                    .select("id, full_name, email, phone, status")
+                    .eq("id", loan.patron_id)
+                    .single();
+
+                  // Fetch book data
+                  const { data: book } = await supabase
+                    .from("books")
+                    .select("id, title, author, isbn, category, status")
+                    .eq("id", loan.book_id)
+                    .single();
+
+                  return {
+                    ...loan,
+                    patrons: patron || null,
+                    books: book || null
+                  };
+                } catch (error) {
+                  console.error(`Error enhancing loan ${loan.id}:`, error);
+                  return loan;
+                }
+              })
+            );
+            setTransactions(manuallyEnhancedLoans);
+          }
+        } else {
+          console.log("✅ Loans join successful, data:", loansData);
+          setTransactions(loansData || []);
+        }
+
+        // Handle PATRONS
+        if (patronsError) {
+          console.error("❌ Patrons error:", patronsError);
+          setBorrowers([]);
+        } else {
+          console.log(`📊 Loaded ${patronsData?.length || 0} patrons from database`);
+          setBorrowers(patronsData || []);
+        }
+
+        // Handle BOOKS - Store ALL books, not just available ones
+        if (booksError) {
+          console.error("❌ Books error:", booksError);
+          setBooks([]);
+        } else {
+          // Store ALL books for transaction display
+          console.log(`📚 Loaded ${booksData?.length || 0} total books`);
+          setBooks(booksData || []);
+        }
+
+      } catch (error) {
+        console.error("❌ Unexpected error:", error);
+        toast.error("Failed to load data");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchData();
+  }, []);
+
+  // Add real-time subscriptions
+  useEffect(() => {
+    const loansSubscription = supabase
+      .channel('loans-changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'loans'
+        },
+        (payload) => {
+          console.log('📖 Real-time loan update:', payload);
+          toast.info("Transactions updated", {
+            description: "Refreshing data..."
+          });
+          // Refresh data
+          fetchData();
+        }
+      )
+      .subscribe()
+
+    return () => {
+      loansSubscription.unsubscribe()
+    }
+  }, [])
+
+  // Refresh function
   const fetchData = async () => {
     try {
       setLoading(true);
-      console.log("🔍 Starting data fetch...");
+      console.log("🔄 Refreshing data...");
 
-      // Fetch loans (with joins), patrons, and books in parallel
       const [
         { data: loansData, error: loansError },
-        { data: patronsData, error: patronsError }, // Changed to patrons
         { data: booksData, error: booksError },
       ] = await Promise.all([
         supabase
@@ -86,7 +242,7 @@ export default function TransactionsPage() {
             loan_date,
             patron_id,
             book_id,
-            patrons:patrons!loans_patron_id_fkey ( // Updated join
+            patrons:patrons!loans_patron_id_fkey (
               id,
               full_name,
               email,
@@ -104,72 +260,26 @@ export default function TransactionsPage() {
           `)
           .order("created_at", { ascending: false }),
 
-        // Fetch from patrons table instead of borrowers
-        supabase
-          .from("patrons")
-          .select("id, full_name, email, phone, status, member_since")
-          .order("full_name"),
-
         supabase
           .from("books")
           .select("id, title, author, isbn, category, status")
           .order("title"),
       ]);
 
-      // Handle LOANS
-      if (loansError) {
-        console.error("❌ Loans join error:", loansError);
-        const { data: simpleLoans, error: simpleError } = await supabase
-          .from("loans")
-          .select("*")
-          .order("created_at", { ascending: false });
-
-        if (simpleError) {
-          console.error("❌ Simple loans error:", simpleError);
-          setTransactions([]);
-        } else {
-          setTransactions(simpleLoans || []);
-        }
-      } else {
-        const enhancedLoans = loansData?.map((loan) => ({
-          ...loan,
-          book_title:
-            loan.books?.title ||
-            booksData?.find((b) => b.id === loan.book_id)?.title ||
-            `Book #${loan.book_id?.substring(0, 8)}...`,
-        }));
-
-        setTransactions(enhancedLoans || []);
+      if (!loansError) {
+        setTransactions(loansData || []);
+      }
+      if (!booksError) {
+        setBooks(booksData || []);
       }
 
-      // Handle PATRONS (was BORROWERS)
-      if (patronsError) {
-        console.error("❌ Patrons error:", patronsError);
-        setBorrowers([]);
-      } else {
-        console.log(`📊 Loaded ${patronsData?.length || 0} patrons from database`);
-        setBorrowers(patronsData || []);
-      }
-
-      if (booksError) {
-        console.error("❌ Books error:", booksError);
-        setBooks([]);
-      } else {
-        // Only show available books for new transactions
-        const availableBooks = (booksData || []).filter(book => book.status === "available");
-        console.log(`📚 Loaded ${availableBooks.length} available books`);
-        setBooks(availableBooks);
-      }
     } catch (error) {
-      console.error("❌ Unexpected error:", error);
-      toast.error("Failed to load data");
+      console.error("❌ Error refreshing data:", error);
+      toast.error("Failed to refresh data");
     } finally {
       setLoading(false);
     }
-  };
-
-  fetchData();
-}, []);
+  }
 
   // Function to check if a transaction is overdue
   const isOverdue = (transaction: Transaction): boolean => {
@@ -217,48 +327,66 @@ export default function TransactionsPage() {
 
   // Function to manually link data when joins fail
   const getEnhancedTransactions = () => {
-  return transactions.map(transaction => {
-    if (transaction.patrons && transaction.books) {
-      return transaction
-    }
+    return transactions.map(transaction => {
+      if (transaction.patrons && transaction.books) {
+        return transaction
+      }
 
-    const patron = borrowers.find(b => b.id === transaction.patron_id) // Changed from borrower to patron
-    const book = books.find(b => b.id === transaction.book_id)
-    
-    return {
-      ...transaction,
-      patrons: patron || undefined, // Changed from borrowers to patrons
-      books: book || undefined
-    }
-  })
-}
+      const patron = borrowers.find(b => b.id === transaction.patron_id)
+      const book = books.find(b => b.id === transaction.book_id)
+      
+      return {
+        ...transaction,
+        patrons: patron || undefined,
+        books: book || undefined
+      }
+    })
+  }
 
   // Enhanced function to get borrower name with multiple fallbacks
   const getBorrowerName = (transaction: Transaction) => {
-  if (transaction.patrons?.full_name) { // Updated from borrowers?.name
-    return transaction.patrons.full_name
+    if (transaction.patrons?.full_name) {
+      return transaction.patrons.full_name
+    }
+    
+    const patron = borrowers.find(b => b.id === transaction.patron_id)
+    if (patron?.full_name) {
+      return patron.full_name
+    }
+    
+    return `Patron #${transaction.patron_id?.substring(0, 8)}...`
   }
-  
-  const patron = borrowers.find(b => b.id === transaction.patron_id)
-  if (patron?.full_name) { // Updated from name
-    return patron.full_name
-  }
-  
-  return `Patron #${transaction.patron_id?.substring(0, 8)}...`
-}
 
   // Enhanced function to get book title with multiple fallbacks
   const getBookTitle = (transaction: Transaction) => {
+    // First try: Direct book data from join
     if (transaction.books?.title) {
-      return transaction.books.title
+      return transaction.books.title;
     }
     
-    const book = books.find(b => b.id === transaction.book_id)
-    if (book?.title) {
-      return book.title
+    // Second try: Look in books array
+    const bookFromArray = books.find(b => b.id === transaction.book_id);
+    if (bookFromArray?.title) {
+      return bookFromArray.title;
     }
     
-    return `Book #${transaction.book_id?.substring(0, 8)}...`
+    // Final fallback: Show ID
+    console.warn(`❌ No book title found for book_id: ${transaction.book_id}`);
+    return `Book #${transaction.book_id?.substring(0, 8)}...`;
+  }
+
+  // Get book author for display
+  const getBookAuthor = (transaction: Transaction) => {
+    if (transaction.books?.author) {
+      return transaction.books.author;
+    }
+    
+    const bookFromArray = books.find(b => b.id === transaction.book_id);
+    if (bookFromArray?.author) {
+      return bookFromArray.author;
+    }
+    
+    return "Unknown Author";
   }
 
   // Get all overdue transactions
@@ -273,30 +401,30 @@ export default function TransactionsPage() {
       
       const [
         { data: sampleLoans, error: loansError },
-        { data: sampleBorrowers, error: borrowersError },
+        { data: samplePatrons, error: patronsError },
         { data: sampleBooks, error: booksError },
       ] = await Promise.all([
         supabase.from("loans").select("id, patron_id, book_id, due_date, status").limit(5),
-        supabase.from("borrowers").select("id, name").limit(5),
+        supabase.from("patrons").select("id, full_name").limit(5),
         supabase.from("books").select("id, title").limit(5),
       ])
 
       if (loansError) throw loansError
-      if (borrowersError) throw borrowersError
+      if (patronsError) throw patronsError
       if (booksError) throw booksError
 
-      console.log("🔍 DATA RELATIONSHIP CHECK:", { sampleLoans, sampleBorrowers, sampleBooks })
+      console.log("🔍 DATA RELATIONSHIP CHECK:", { sampleLoans, samplePatrons, sampleBooks })
 
-      if (sampleLoans && sampleBorrowers) {
-        const borrowerIds = sampleBorrowers.map(b => b.id)
-        const invalidLoans = sampleLoans.filter(loan => !borrowerIds.includes(loan.patron_id))
+      if (sampleLoans && samplePatrons) {
+        const patronIds = samplePatrons.map(b => b.id)
+        const invalidLoans = sampleLoans.filter(loan => !patronIds.includes(loan.patron_id))
         
         if (invalidLoans.length > 0) {
           console.warn("⚠️ Loans with invalid patron_ids:", invalidLoans)
-          toast.warning(`Found ${invalidLoans.length} loans with invalid borrower references`)
+          toast.warning(`Found ${invalidLoans.length} loans with invalid patron references`)
         } else {
           console.log("✅ All sample loans have valid patron_ids")
-          toast.success("All loans have valid borrower references!")
+          toast.success("All loans have valid patron references!")
         }
       }
 
@@ -365,12 +493,18 @@ export default function TransactionsPage() {
         } : t)
       )
 
-      // Refresh available books list
+      // Refresh books data to reflect status change
       const { data: refreshedBooks } = await supabase
         .from("books")
         .select("id, title, author, status")
-        .eq("status", "available")
-      setBooks(refreshedBooks || [])
+      setBooks(prev => {
+        const updatedBooks = [...prev];
+        const bookIndex = updatedBooks.findIndex(b => b.id === transaction.book_id);
+        if (bookIndex !== -1) {
+          updatedBooks[bookIndex] = { ...updatedBooks[bookIndex], status: "available" };
+        }
+        return updatedBooks;
+      })
 
       toast.success("Book marked as returned ✅")
     } catch (error) {
@@ -381,7 +515,7 @@ export default function TransactionsPage() {
 
   const sendOverdueReminder = async (transaction: Transaction) => {
     try {
-      const borrowerEmail = transaction.patrons?.email // Changed from borrowers?.email
+      const borrowerEmail = transaction.patrons?.email
       const borrowerName = getBorrowerName(transaction)
       const bookTitle = getBookTitle(transaction)
       const daysOverdue = getDaysOverdue(transaction)
@@ -474,8 +608,8 @@ export default function TransactionsPage() {
         .from("loans")
         .select(`
           *,
-          borrowers!loans_patron_id_fkey ( id, name, email ),
-          books!loans_book_id_fkey ( id, title, author, isbn, status )
+          patrons:patrons!loans_patron_id_fkey ( id, full_name, email ),
+          books:books!loans_book_id_fkey ( id, title, author, isbn, status )
         `)
         .order("created_at", { ascending: false })
 
@@ -485,14 +619,18 @@ export default function TransactionsPage() {
         setTransactions(prev => [loanData, ...prev])
       }
 
-      // Reset form and refresh available books
+      // Reset form and refresh books data
       setNewLoan({ patron_id: "", book_id: "", due_date: "" })
 
-      const { data: refreshedBooks } = await supabase
-        .from("books")
-        .select("id, title, author, status")
-        .eq("status", "available")
-      setBooks(refreshedBooks || [])
+      // Update local books state
+      setBooks(prev => {
+        const updatedBooks = [...prev];
+        const bookIndex = updatedBooks.findIndex(b => b.id === newLoan.book_id);
+        if (bookIndex !== -1) {
+          updatedBooks[bookIndex] = { ...updatedBooks[bookIndex], status: "borrowed" };
+        }
+        return updatedBooks;
+      })
 
       toast.success("Transaction added successfully ✅")
     } catch (error) {
@@ -511,16 +649,19 @@ export default function TransactionsPage() {
 
   // Filter active transactions based on search
   const filteredTransactions = enhancedTransactions.filter(t => {
-  const borrowerName = getBorrowerName(t).toLowerCase()
-  const bookTitle = getBookTitle(t).toLowerCase()
-  const borrowerMatch = borrowerName.includes(search.borrower.toLowerCase())
-  const bookMatch = bookTitle.includes(search.book.toLowerCase())
-  const dateMatch = search.date
-    ? new Date(t.due_date).toISOString().split("T")[0] === search.date
-    : true
-  const activeStatus = t.status !== "returned" // This should catch both "active" and "borrowed" status
-  return borrowerMatch && bookMatch && dateMatch && activeStatus
-})
+    const borrowerName = getBorrowerName(t).toLowerCase()
+    const bookTitle = getBookTitle(t).toLowerCase()
+    const borrowerMatch = borrowerName.includes(search.borrower.toLowerCase())
+    const bookMatch = bookTitle.includes(search.book.toLowerCase())
+    const dateMatch = search.date
+      ? new Date(t.due_date).toISOString().split("T")[0] === search.date
+      : true
+    
+    // Include both "active" and "borrowed" status as active transactions
+    const activeStatus = t.status === "active" || t.status === "borrowed"
+    
+    return borrowerMatch && bookMatch && dateMatch && activeStatus
+  })
 
   // Filter history transactions based on search
   const filteredHistory = enhancedTransactions
@@ -591,11 +732,27 @@ export default function TransactionsPage() {
         <main className="flex-1 lg:ml-64 p-6 space-y-6">
           <div className="max-w-7xl mx-auto space-y-6">
             {/* Header */}
-            <div>
-              <h1 className="text-3xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">
-                Transactions
-              </h1>
-              <p className="text-muted-foreground">Manage book loans, returns, and overdue items</p>
+            <div className="flex justify-between items-center">
+              <div>
+                <h1 className="text-3xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">
+                  Transactions
+                </h1>
+                <p className="text-muted-foreground">Manage book loans, returns, and overdue items</p>
+              </div>
+              <Button 
+                onClick={fetchData} 
+                variant="outline" 
+                size="sm"
+                disabled={loading}
+                className="backdrop-blur-sm border-border/50 hover:bg-green-50 hover:border-green-200"
+              >
+                {loading ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <RefreshCw className="h-4 w-4 mr-2" />
+                )}
+                Refresh
+              </Button>
             </div>
 
             {/* Stats Cards */}
@@ -665,7 +822,7 @@ export default function TransactionsPage() {
                           {overdueTransactions.length} Overdue Item{overdueTransactions.length !== 1 ? 's' : ''}
                         </h3>
                         <p className="text-sm text-red-700">
-                          {overdueTransactions.length} item{overdueTransactions.length !== 1 ? 's' : ''} past due date. Please follow up with borrowers.
+                          {overdueTransactions.length} item{overdueTransactions.length !== 1 ? 's' : ''} past due date. Please follow up with patrons.
                         </p>
                       </div>
                     </div>
@@ -716,151 +873,153 @@ export default function TransactionsPage() {
 
               {/* New Transaction Tab */}
               <TabsContent value="new" className="space-y-6">
-              <Card className="backdrop-blur-xl border-border/30 bg-gradient-to-b from-background/95 to-background/90 shadow-lg shadow-indigo-500/10">
-                <CardHeader>
-                  <CardTitle className="bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">
-                    Add New Transaction
-                  </CardTitle>
-                  <CardDescription>
-                    Create a new book loan transaction. 
-                    {borrowers.length > 0 ? ` Showing all ${borrowers.length} patrons.` : ' No patrons found.'}
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <form onSubmit={handleAddTransaction} className="space-y-4">
-                    <div className="grid gap-4 md:grid-cols-3">
-                      <div className="space-y-3">
-                        <Label htmlFor="borrower" className="text-sm font-medium text-foreground/80">
-                          Patron {borrowers.length > 0 && `(${borrowers.length} total)`}
-                        </Label>
-                        <Select
-                          value={newLoan.patron_id}
-                          onValueChange={val => setNewLoan({ ...newLoan, patron_id: val })}
-                        >
-                          <SelectTrigger className="bg-background/50 border-border/50 h-11">
-                            <SelectValue placeholder={borrowers.length > 0 ? "Select patron" : "No patrons available"} />
-                          </SelectTrigger>
-                          <SelectContent className="max-h-60 overflow-y-auto">
-                            {borrowers.length > 0 ? (
-                              borrowers.map(b => (
-                                <SelectItem key={b.id} value={b.id} className="py-2">
-                                  <div className="flex flex-col gap-1">
-                                    <div className="flex items-center justify-between">
-                                      <span className="font-medium text-sm">{b.full_name}</span>
-                                      <Badge 
-                                        variant={b.status === "active" ? "default" : "secondary"} 
-                                        className="text-xs"
-                                      >
-                                        {b.status || "unknown"}
-                                      </Badge>
+                <Card className="backdrop-blur-xl border-border/30 bg-gradient-to-b from-background/95 to-background/90 shadow-lg shadow-indigo-500/10">
+                  <CardHeader>
+                    <CardTitle className="bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">
+                      Add New Transaction
+                    </CardTitle>
+                    <CardDescription>
+                      Create a new book loan transaction. 
+                      {borrowers.length > 0 ? ` Showing all ${borrowers.length} patrons.` : ' No patrons found.'}
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <form onSubmit={handleAddTransaction} className="space-y-4">
+                      <div className="grid gap-4 md:grid-cols-3">
+                        <div className="space-y-3">
+                          <Label htmlFor="borrower" className="text-sm font-medium text-foreground/80">
+                            Patron {borrowers.length > 0 && `(${borrowers.length} total)`}
+                          </Label>
+                          <Select
+                            value={newLoan.patron_id}
+                            onValueChange={val => setNewLoan({ ...newLoan, patron_id: val })}
+                          >
+                            <SelectTrigger className="bg-background/50 border-border/50 h-11">
+                              <SelectValue placeholder={borrowers.length > 0 ? "Select patron" : "No patrons available"} />
+                            </SelectTrigger>
+                            <SelectContent className="max-h-60 overflow-y-auto">
+                              {borrowers.length > 0 ? (
+                                borrowers.map(b => (
+                                  <SelectItem key={b.id} value={b.id} className="py-2">
+                                    <div className="flex flex-col gap-1">
+                                      <div className="flex items-center justify-between">
+                                        <span className="font-medium text-sm">{b.full_name}</span>
+                                        <Badge 
+                                          variant={b.status === "active" ? "default" : "secondary"} 
+                                          className="text-xs"
+                                        >
+                                          {b.status || "unknown"}
+                                        </Badge>
+                                      </div>
+                                      {b.email && (
+                                        <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                                          <Mail className="h-3 w-3" />
+                                          {b.email}
+                                        </div>
+                                      )}
+                                      {b.phone && (
+                                        <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                                          <Phone className="h-3 w-3" />
+                                          {b.phone}
+                                        </div>
+                                      )}
                                     </div>
-                                    {b.email && (
-                                      <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                                        <Mail className="h-3 w-3" />
-                                        {b.email}
-                                      </div>
-                                    )}
-                                    {b.phone && (
-                                      <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                                        <Phone className="h-3 w-3" />
-                                        {b.phone}
-                                      </div>
+                                  </SelectItem>
+                                ))
+                              ) : (
+                                <SelectItem value="no-patrons" disabled>
+                                  No patrons available
+                                </SelectItem>
+                              )}
+                            </SelectContent>
+                          </Select>
+                          {borrowers.length > 0 && (
+                            <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
+                              <span>Active: {borrowers.filter(b => b.status === 'active').length}</span>
+                              <span>•</span>
+                              <span>Inactive: {borrowers.filter(b => b.status === 'inactive').length}</span>
+                              <span>•</span>
+                              <span>Archived: {borrowers.filter(b => b.status === 'archived').length}</span>
+                              <span>•</span>
+                              <span>Total: {borrowers.length}</span>
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="space-y-3">
+                          <Label htmlFor="book" className="text-sm font-medium text-foreground/80">Book</Label>
+                          <Select
+                            value={newLoan.book_id}
+                            onValueChange={val => setNewLoan({ ...newLoan, book_id: val })}
+                          >
+                            <SelectTrigger className="bg-background/50 border-border/50 h-11">
+                              <SelectValue placeholder="Select book" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {books
+                                .filter(book => book.status === "available")
+                                .map(b => (
+                                <SelectItem key={b.id} value={b.id}>
+                                  <div className="flex flex-col">
+                                    <span className="font-medium">{b.title}</span>
+                                    <span className="text-xs text-muted-foreground">by {b.author}</span>
+                                    {b.isbn && (
+                                      <span className="text-xs text-muted-foreground">ISBN: {b.isbn}</span>
                                     )}
                                   </div>
                                 </SelectItem>
-                              ))
-                            ) : (
-                              <SelectItem value="no-patrons" disabled>
-                                No patrons available
-                              </SelectItem>
-                            )}
-                          </SelectContent>
-                        </Select>
-                        {borrowers.length > 0 && (
-                          <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
-                            <span>Active: {borrowers.filter(b => b.status === 'active').length}</span>
-                            <span>•</span>
-                            <span>Inactive: {borrowers.filter(b => b.status === 'inactive').length}</span>
-                            <span>•</span>
-                            <span>Archived: {borrowers.filter(b => b.status === 'archived').length}</span>
-                            <span>•</span>
-                            <span>Total: {borrowers.length}</span>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          <p className="text-xs text-muted-foreground">
+                            Showing {books.filter(b => b.status === "available").length} available book{books.filter(b => b.status === "available").length !== 1 ? 's' : ''}
+                          </p>
+                        </div>
+
+                        <div className="space-y-3">
+                          <Label htmlFor="due_date" className="text-sm font-medium text-foreground/80">Due Date</Label>
+                          <div className="relative">
+                            <Calendar className="absolute left-3 top-3 h-4 w-4 text-indigo-600" />
+                            <Input
+                              type="date"
+                              value={newLoan.due_date}
+                              onChange={e => setNewLoan({ ...newLoan, due_date: e.target.value })}
+                              min={new Date().toISOString().split('T')[0]}
+                              className="pl-11 bg-background/50 border-border/50 focus:border-indigo-300 transition-colors h-11"
+                            />
                           </div>
-                        )}
-                      </div>
-
-                      <div className="space-y-3">
-                        <Label htmlFor="book" className="text-sm font-medium text-foreground/80">Book</Label>
-                        <Select
-                          value={newLoan.book_id}
-                          onValueChange={val => setNewLoan({ ...newLoan, book_id: val })}
-                        >
-                          <SelectTrigger className="bg-background/50 border-border/50 h-11">
-                            <SelectValue placeholder="Select book" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {books.map(b => (
-                              <SelectItem key={b.id} value={b.id}>
-                                <div className="flex flex-col">
-                                  <span className="font-medium">{b.title}</span>
-                                  <span className="text-xs text-muted-foreground">by {b.author}</span>
-                                  {b.isbn && (
-                                    <span className="text-xs text-muted-foreground">ISBN: {b.isbn}</span>
-                                  )}
-                                </div>
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        <p className="text-xs text-muted-foreground">
-                          Showing {books.length} available book{books.length !== 1 ? 's' : ''}
-                        </p>
-                      </div>
-
-                      <div className="space-y-3">
-                        <Label htmlFor="due_date" className="text-sm font-medium text-foreground/80">Due Date</Label>
-                        <div className="relative">
-                          <Calendar className="absolute left-3 top-3 h-4 w-4 text-indigo-600" />
-                          <Input
-                            type="date"
-                            value={newLoan.due_date}
-                            onChange={e => setNewLoan({ ...newLoan, due_date: e.target.value })}
-                            min={new Date().toISOString().split('T')[0]}
-                            className="pl-11 bg-background/50 border-border/50 focus:border-indigo-300 transition-colors h-11"
-                          />
                         </div>
                       </div>
-                    </div>
 
-                    <div className="flex justify-end">
-                      <Button 
-                        type="submit" 
-                        disabled={submitting || borrowers.length === 0}
-                        className={cn(
-                          "bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700",
-                          "text-white shadow-lg shadow-indigo-500/25 hover:shadow-indigo-500/40",
-                          "transition-all duration-300 transform hover:scale-[1.02]",
-                          "border-0 h-11",
-                          borrowers.length === 0 && "opacity-50 cursor-not-allowed"
-                        )}
-                      >
-                        {submitting ? (
-                          <>
-                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                            Adding...
-                          </>
-                        ) : (
-                          <>
-                            <Plus className="h-4 w-4 mr-2" />
-                            Add Transaction
-                          </>
-                        )}
-                      </Button>
-                    </div>
-                  </form>
-                </CardContent>
-              </Card>
-            </TabsContent>
+                      <div className="flex justify-end">
+                        <Button 
+                          type="submit" 
+                          disabled={submitting || borrowers.length === 0}
+                          className={cn(
+                            "bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700",
+                            "text-white shadow-lg shadow-indigo-500/25 hover:shadow-indigo-500/40",
+                            "transition-all duration-300 transform hover:scale-[1.02]",
+                            "border-0 h-11",
+                            borrowers.length === 0 && "opacity-50 cursor-not-allowed"
+                          )}
+                        >
+                          {submitting ? (
+                            <>
+                              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                              Adding...
+                            </>
+                          ) : (
+                            <>
+                              <Plus className="h-4 w-4 mr-2" />
+                              Add Transaction
+                            </>
+                          )}
+                        </Button>
+                      </div>
+                    </form>
+                  </CardContent>
+                </Card>
+              </TabsContent>
 
               {/* Active Transactions Tab */}
               <TabsContent value="active" className="space-y-6">
@@ -877,10 +1036,10 @@ export default function TransactionsPage() {
                       <div className="space-y-3">
                         <Label className="text-sm font-medium text-foreground/80 flex items-center gap-2">
                           <User className="h-4 w-4 text-indigo-600" />
-                          Search Borrower
+                          Search Patron
                         </Label>
                         <Input
-                          placeholder="Borrower name"
+                          placeholder="Patron name"
                           value={search.borrower}
                           onChange={e => setSearch({ ...search, borrower: e.target.value })}
                           className="bg-background/50 border-border/50 focus:border-indigo-300 transition-colors h-11"
@@ -918,149 +1077,148 @@ export default function TransactionsPage() {
 
                 {/* Active Transactions Table */}
                 {loading ? (
-                <div className="text-center py-8">
-                  <Loader2 className="h-8 w-8 animate-spin text-indigo-600 mx-auto mb-4" />
-                  <p className="text-muted-foreground">Loading transactions...</p>
-                </div>
-              ) : filteredTransactions.length === 0 ? (
-                <Card className="backdrop-blur-xl border-border/30 text-center py-8">
-                  <Activity className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                  <h3 className="text-lg font-medium text-foreground mb-2">No active transactions found</h3>
-                  <p className="text-muted-foreground">Try adjusting your search criteria or create a new transaction.</p>
-                </Card>
-              ) : (
-                <Card className="backdrop-blur-xl border-border/30 bg-gradient-to-b from-background/95 to-background/90 shadow-lg shadow-indigo-500/10 overflow-hidden">
-                  <CardHeader>
-                    <CardTitle className="bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">
-                      Active Transactions ({filteredTransactions.length})
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="p-0">
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-sm">
-                        <thead className="bg-muted/30 backdrop-blur-sm border-b border-border/30">
-                          <tr className="text-left">
-                            <th className="p-4 font-medium text-foreground/80">Patron</th>
-                            <th className="p-4 font-medium text-foreground/80">Book</th>
-                            <th className="p-4 font-medium text-foreground/80">Due Date</th>
-                            <th className="p-4 font-medium text-foreground/80">Status</th>
-                            <th className="p-4 font-medium text-foreground/80 text-right">Actions</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {filteredTransactions.map(t => {
-                            const borrowerName = getBorrowerName(t);
-                            const bookTitle = getBookTitle(t);
-                            const isTransactionOverdue = isOverdue(t);
-                            const overdueStatus = getOverdueStatus(t);
-                            const overdueSeverity = getOverdueSeverity(t);
-                            
-                            return (
-                              <tr 
-                                key={t.id} 
-                                className={cn(
-                                  "border-b border-border/30 hover:bg-muted/20 transition-colors",
-                                  isTransactionOverdue && "bg-red-50/50 hover:bg-red-100/50"
-                                )}
-                              >
-                                <td className="p-4 font-medium">
-                                  <div className="flex items-center gap-2">
-                                    {isTransactionOverdue && <AlertTriangle className="h-4 w-4 text-red-500" />}
-                                    <User className="h-4 w-4 text-indigo-600" />
-                                    <div>
-                                      <div className="font-medium">{borrowerName}</div>
-                                      {t.patrons?.email && (
-                                        <div className="text-xs text-muted-foreground flex items-center gap-1">
-                                          <Mail className="h-3 w-3" />
-                                          {t.patrons.email}
-                                        </div>
-                                      )}
+                  <div className="text-center py-8">
+                    <Loader2 className="h-8 w-8 animate-spin text-indigo-600 mx-auto mb-4" />
+                    <p className="text-muted-foreground">Loading transactions...</p>
+                  </div>
+                ) : filteredTransactions.length === 0 ? (
+                  <Card className="backdrop-blur-xl border-border/30 text-center py-8">
+                    <Activity className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                    <h3 className="text-lg font-medium text-foreground mb-2">No active transactions found</h3>
+                    <p className="text-muted-foreground">Try adjusting your search criteria or create a new transaction.</p>
+                  </Card>
+                ) : (
+                  <Card className="backdrop-blur-xl border-border/30 bg-gradient-to-b from-background/95 to-background/90 shadow-lg shadow-indigo-500/10 overflow-hidden">
+                    <CardHeader>
+                      <CardTitle className="bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">
+                        Active Transactions ({filteredTransactions.length})
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="p-0">
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-sm">
+                          <thead className="bg-muted/30 backdrop-blur-sm border-b border-border/30">
+                            <tr className="text-left">
+                              <th className="p-4 font-medium text-foreground/80">Patron</th>
+                              <th className="p-4 font-medium text-foreground/80">Book</th>
+                              <th className="p-4 font-medium text-foreground/80">Due Date</th>
+                              <th className="p-4 font-medium text-foreground/80">Status</th>
+                              <th className="p-4 font-medium text-foreground/80 text-right">Actions</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {filteredTransactions.map(t => {
+                              const borrowerName = getBorrowerName(t);
+                              const bookTitle = getBookTitle(t);
+                              const bookAuthor = getBookAuthor(t);
+                              const isTransactionOverdue = isOverdue(t);
+                              const overdueStatus = getOverdueStatus(t);
+                              const overdueSeverity = getOverdueSeverity(t);
+                              
+                              return (
+                                <tr 
+                                  key={t.id} 
+                                  className={cn(
+                                    "border-b border-border/30 hover:bg-muted/20 transition-colors",
+                                    isTransactionOverdue && "bg-red-50/50 hover:bg-red-100/50"
+                                  )}
+                                >
+                                  <td className="p-4 font-medium">
+                                    <div className="flex items-center gap-2">
+                                      {isTransactionOverdue && <AlertTriangle className="h-4 w-4 text-red-500" />}
+                                      <User className="h-4 w-4 text-indigo-600" />
+                                      <div>
+                                        <div className="font-medium">{borrowerName}</div>
+                                        {t.patrons?.email && (
+                                          <div className="text-xs text-muted-foreground flex items-center gap-1">
+                                            <Mail className="h-3 w-3" />
+                                            {t.patrons.email}
+                                          </div>
+                                        )}
+                                      </div>
                                     </div>
-                                  </div>
-                                </td>
-                                <td className="p-4">
-                                  <div className="flex items-center gap-2">
-                                    <Book className="h-4 w-4 text-indigo-600" />
-                                    <div>
-                                      <div className="font-medium">{bookTitle}</div>
-                                      {t.books?.author && (
-                                        <div className="text-xs text-muted-foreground">by {t.books.author}</div>
-                                      )}
+                                  </td>
+                                  <td className="p-4">
+                                    <div className="flex items-center gap-2">
+                                      <Book className="h-4 w-4 text-indigo-600" />
+                                      <div>
+                                        <div className="font-medium">{bookTitle}</div>
+                                        <div className="text-xs text-muted-foreground">by {bookAuthor}</div>
+                                      </div>
                                     </div>
-                                  </div>
-                                </td>
-                                <td className="p-4">
-                                  <div className="flex items-center gap-2">
-                                    <Calendar className="h-4 w-4 text-indigo-600" />
-                                    <div>
-                                      <div>{new Date(t.due_date).toLocaleDateString()}</div>
+                                  </td>
+                                  <td className="p-4">
+                                    <div className="flex items-center gap-2">
+                                      <Calendar className="h-4 w-4 text-indigo-600" />
+                                      <div>
+                                        <div>{new Date(t.due_date).toLocaleDateString()}</div>
+                                        {isTransactionOverdue && (
+                                          <Badge variant={overdueSeverity} className="mt-1 text-xs backdrop-blur-sm">
+                                            {overdueStatus}
+                                          </Badge>
+                                        )}
+                                      </div>
+                                    </div>
+                                  </td>
+                                  <td className="p-4">
+                                    <div className="flex flex-col gap-1">
+                                      <Badge 
+                                        variant={getStatusVariant(t.status)} 
+                                        className="backdrop-blur-sm w-fit"
+                                      >
+                                        {t.status}
+                                      </Badge>
                                       {isTransactionOverdue && (
-                                        <Badge variant={overdueSeverity} className="mt-1 text-xs backdrop-blur-sm">
-                                          {overdueStatus}
+                                        <Badge variant="destructive" className="text-xs backdrop-blur-sm w-fit">
+                                          Overdue
                                         </Badge>
                                       )}
                                     </div>
-                                  </div>
-                                </td>
-                                <td className="p-4">
-                                  <div className="flex flex-col gap-1">
-                                    <Badge 
-                                      variant={getStatusVariant(t.status)} 
-                                      className="backdrop-blur-sm w-fit"
-                                    >
-                                      {t.status}
-                                    </Badge>
-                                    {isTransactionOverdue && (
-                                      <Badge variant="destructive" className="text-xs backdrop-blur-sm w-fit">
-                                        Overdue
-                                      </Badge>
-                                    )}
-                                  </div>
-                                </td>
-                                <td className="p-4 text-right">
-                                  <div className="flex gap-2 justify-end">
-                                    {t.status === "borrowed" && (
-                                      <Button 
-                                        size="sm" 
-                                        variant="outline" 
-                                        onClick={() => markAsActive(t.id)}
-                                        className="backdrop-blur-sm border-border/50 hover:bg-blue-50 hover:border-blue-200"
-                                      >
-                                        Activate
-                                      </Button>
-                                    )}
-                                    {t.status !== "returned" && (
-                                      <Button 
-                                        size="sm" 
-                                        variant="outline" 
-                                        onClick={() => markAsReturned(t.id)}
-                                        className="backdrop-blur-sm border-border/50 hover:bg-green-50 hover:border-green-200"
-                                      >
-                                        Mark Returned
-                                      </Button>
-                                    )}
-                                    {isTransactionOverdue && (
-                                      <Button 
-                                        size="sm" 
-                                        variant="destructive" 
-                                        onClick={() => sendOverdueReminder(t)}
-                                        className="backdrop-blur-sm"
-                                      >
-                                        <Mail className="h-4 w-4 mr-2" />
-                                        Reminder
-                                      </Button>
-                                    )}
-                                  </div>
-                                </td>
-                              </tr>
-                            );
-                          })}
-                        </tbody>
-                      </table>
-                    </div>
-                  </CardContent>
-                </Card>
-              )}
+                                  </td>
+                                  <td className="p-4 text-right">
+                                    <div className="flex gap-2 justify-end">
+                                      {t.status === "borrowed" && (
+                                        <Button 
+                                          size="sm" 
+                                          variant="outline" 
+                                          onClick={() => markAsActive(t.id)}
+                                          className="backdrop-blur-sm border-border/50 hover:bg-blue-50 hover:border-blue-200"
+                                        >
+                                          Activate
+                                        </Button>
+                                      )}
+                                      {t.status !== "returned" && (
+                                        <Button 
+                                          size="sm" 
+                                          variant="outline" 
+                                          onClick={() => markAsReturned(t.id)}
+                                          className="backdrop-blur-sm border-border/50 hover:bg-green-50 hover:border-green-200"
+                                        >
+                                          Mark Returned
+                                        </Button>
+                                      )}
+                                      {isTransactionOverdue && (
+                                        <Button 
+                                          size="sm" 
+                                          variant="destructive" 
+                                          onClick={() => sendOverdueReminder(t)}
+                                          className="backdrop-blur-sm"
+                                        >
+                                          <Mail className="h-4 w-4 mr-2" />
+                                          Reminder
+                                        </Button>
+                                      )}
+                                    </div>
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
               </TabsContent>
 
               {/* Overdue Items Tab */}
@@ -1122,7 +1280,7 @@ export default function TransactionsPage() {
                           <table className="w-full text-sm">
                             <thead className="bg-red-50/50 backdrop-blur-sm border-b border-red-200/50">
                               <tr className="text-left">
-                                <th className="p-4 font-medium text-foreground/80">Borrower</th>
+                                <th className="p-4 font-medium text-foreground/80">Patron</th>
                                 <th className="p-4 font-medium text-foreground/80">Book</th>
                                 <th className="p-4 font-medium text-foreground/80">Due Date</th>
                                 <th className="p-4 font-medium text-foreground/80">Days Overdue</th>
@@ -1133,58 +1291,64 @@ export default function TransactionsPage() {
                             <tbody>
                               {overdueTransactions
                                 .sort((a, b) => getDaysOverdue(b) - getDaysOverdue(a))
-                                .map(t => (
-                                <tr key={t.id} className="border-b border-red-100/50 bg-red-50/30 hover:bg-red-100/30 transition-colors">
-                                  <td className="p-4 font-medium">
-                                    <div className="flex items-center gap-2">
-                                      <AlertTriangle className="h-4 w-4 text-red-500" />
-                                      <User className="h-4 w-4 text-indigo-600" />
-                                      {getBorrowerName(t)}
-                                    </div>
-                                  </td>
-                                  <td className="p-4">
-                                    <div className="flex items-center gap-2">
-                                      <Book className="h-4 w-4 text-indigo-600" />
-                                      {getBookTitle(t)}
-                                    </div>
-                                  </td>
-                                  <td className="p-4">
-                                    <div className="flex items-center gap-2 text-red-700">
-                                      <Calendar className="h-4 w-4" />
-                                      {new Date(t.due_date).toLocaleDateString()}
-                                    </div>
-                                  </td>
-                                  <td className="p-4">
-                                    <Badge variant={getOverdueSeverity(t)} className="backdrop-blur-sm">
-                                      {getDaysOverdue(t)} day{getDaysOverdue(t) !== 1 ? 's' : ''} overdue
-                                    </Badge>
-                                  </td>
-                                  <td className="p-4">
-                                    <Badge variant={getStatusVariant(t.status)} className="backdrop-blur-sm">
-                                      {t.status}
-                                    </Badge>
-                                  </td>
-                                  <td className="p-4 text-right flex gap-2 justify-end">
-                                    <Button 
-                                      size="sm" 
-                                      variant="outline" 
-                                      onClick={() => markAsReturned(t.id)}
-                                      className="backdrop-blur-sm border-border/50 hover:bg-green-50 hover:border-green-200"
-                                    >
-                                      Mark Returned
-                                    </Button>
-                                    <Button 
-                                      size="sm" 
-                                      variant="destructive" 
-                                      onClick={() => sendOverdueReminder(t)}
-                                      className="backdrop-blur-sm"
-                                    >
-                                      <Mail className="h-4 w-4 mr-2" />
-                                      Send Reminder
-                                    </Button>
-                                  </td>
-                                </tr>
-                              ))}
+                                .map(t => {
+                                const bookAuthor = getBookAuthor(t);
+                                return (
+                                  <tr key={t.id} className="border-b border-red-100/50 bg-red-50/30 hover:bg-red-100/30 transition-colors">
+                                    <td className="p-4 font-medium">
+                                      <div className="flex items-center gap-2">
+                                        <AlertTriangle className="h-4 w-4 text-red-500" />
+                                        <User className="h-4 w-4 text-indigo-600" />
+                                        {getBorrowerName(t)}
+                                      </div>
+                                    </td>
+                                    <td className="p-4">
+                                      <div className="flex items-center gap-2">
+                                        <Book className="h-4 w-4 text-indigo-600" />
+                                        <div>
+                                          <div className="font-medium">{getBookTitle(t)}</div>
+                                          <div className="text-xs text-muted-foreground">by {bookAuthor}</div>
+                                        </div>
+                                      </div>
+                                    </td>
+                                    <td className="p-4">
+                                      <div className="flex items-center gap-2 text-red-700">
+                                        <Calendar className="h-4 w-4" />
+                                        {new Date(t.due_date).toLocaleDateString()}
+                                      </div>
+                                    </td>
+                                    <td className="p-4">
+                                      <Badge variant={getOverdueSeverity(t)} className="backdrop-blur-sm">
+                                        {getDaysOverdue(t)} day{getDaysOverdue(t) !== 1 ? 's' : ''} overdue
+                                      </Badge>
+                                    </td>
+                                    <td className="p-4">
+                                      <Badge variant={getStatusVariant(t.status)} className="backdrop-blur-sm">
+                                        {t.status}
+                                      </Badge>
+                                    </td>
+                                    <td className="p-4 text-right flex gap-2 justify-end">
+                                      <Button 
+                                        size="sm" 
+                                        variant="outline" 
+                                        onClick={() => markAsReturned(t.id)}
+                                        className="backdrop-blur-sm border-border/50 hover:bg-green-50 hover:border-green-200"
+                                      >
+                                        Mark Returned
+                                      </Button>
+                                      <Button 
+                                        size="sm" 
+                                        variant="destructive" 
+                                        onClick={() => sendOverdueReminder(t)}
+                                        className="backdrop-blur-sm"
+                                      >
+                                        <Mail className="h-4 w-4 mr-2" />
+                                        Send Reminder
+                                      </Button>
+                                    </td>
+                                  </tr>
+                                );
+                              })}
                             </tbody>
                           </table>
                         </div>
@@ -1209,10 +1373,10 @@ export default function TransactionsPage() {
                       <div className="space-y-3">
                         <Label className="text-sm font-medium text-foreground/80 flex items-center gap-2">
                           <User className="h-4 w-4 text-indigo-600" />
-                          Borrower
+                          Patron
                         </Label>
                         <Input
-                          placeholder="Borrower name"
+                          placeholder="Patron name"
                           value={historySearch.borrower}
                           onChange={e => setHistorySearch({ ...historySearch, borrower: e.target.value })}
                           className="bg-background/50 border-border/50 focus:border-indigo-300 transition-colors h-11"
@@ -1321,7 +1485,7 @@ export default function TransactionsPage() {
                                 onClick={() => handleSort("name")}
                               >
                                 <div className="flex items-center gap-1">
-                                  Borrower
+                                  Patron
                                   <ArrowUpDown className="h-3 w-3" />
                                 </div>
                               </th>
@@ -1340,59 +1504,65 @@ export default function TransactionsPage() {
                             </tr>
                           </thead>
                           <tbody>
-                            {filteredHistory.map(t => (
-                              <tr 
-                                key={t.id} 
-                                className={cn(
-                                  "border-b border-border/30 hover:bg-muted/20 transition-colors",
-                                  isOverdue(t) && "bg-red-50/30 hover:bg-red-100/30"
-                                )}
-                              >
-                                <td className="p-4">
-                                  <div className="flex items-center gap-2 text-muted-foreground">
-                                    <Calendar className="h-4 w-4" />
-                                    {new Date(t.created_at).toLocaleDateString()}
-                                  </div>
-                                </td>
-                                <td className="p-4 font-medium">
-                                  <div className="flex items-center gap-2">
-                                    <User className="h-4 w-4 text-indigo-600" />
-                                    {getBorrowerName(t)}
-                                  </div>
-                                </td>
-                                <td className="p-4">
-                                  <div className="flex items-center gap-2">
-                                    <Book className="h-4 w-4 text-indigo-600" />
-                                    {getBookTitle(t)}
-                                  </div>
-                                </td>
-                                <td className="p-4">
-                                  {new Date(t.due_date).toLocaleDateString()}
-                                </td>
-                                <td className="p-4">
-                                  {t.returned_date ? (
-                                    <div className="flex items-center gap-2 text-green-600">
-                                      <Calendar className="h-4 w-4" />
-                                      {new Date(t.returned_date).toLocaleDateString()}
-                                    </div>
-                                  ) : (
-                                    <span className="text-muted-foreground">Not returned</span>
+                            {filteredHistory.map(t => {
+                              const bookAuthor = getBookAuthor(t);
+                              return (
+                                <tr 
+                                  key={t.id} 
+                                  className={cn(
+                                    "border-b border-border/30 hover:bg-muted/20 transition-colors",
+                                    isOverdue(t) && "bg-red-50/30 hover:bg-red-100/30"
                                   )}
-                                </td>
-                                <td className="p-4">
-                                  <div className="flex flex-col gap-1">
-                                    <Badge variant={getStatusVariant(t.status)} className="backdrop-blur-sm">
-                                      {t.status}
-                                    </Badge>
-                                    {isOverdue(t) && (
-                                      <Badge variant="destructive" className="text-xs backdrop-blur-sm">
-                                        Overdue ({getDaysOverdue(t)} days)
-                                      </Badge>
+                                >
+                                  <td className="p-4">
+                                    <div className="flex items-center gap-2 text-muted-foreground">
+                                      <Calendar className="h-4 w-4" />
+                                      {new Date(t.created_at).toLocaleDateString()}
+                                    </div>
+                                  </td>
+                                  <td className="p-4 font-medium">
+                                    <div className="flex items-center gap-2">
+                                      <User className="h-4 w-4 text-indigo-600" />
+                                      {getBorrowerName(t)}
+                                    </div>
+                                  </td>
+                                  <td className="p-4">
+                                    <div className="flex items-center gap-2">
+                                      <Book className="h-4 w-4 text-indigo-600" />
+                                      <div>
+                                        <div className="font-medium">{getBookTitle(t)}</div>
+                                        <div className="text-xs text-muted-foreground">by {bookAuthor}</div>
+                                      </div>
+                                    </div>
+                                  </td>
+                                  <td className="p-4">
+                                    {new Date(t.due_date).toLocaleDateString()}
+                                  </td>
+                                  <td className="p-4">
+                                    {t.returned_date ? (
+                                      <div className="flex items-center gap-2 text-green-600">
+                                        <Calendar className="h-4 w-4" />
+                                        {new Date(t.returned_date).toLocaleDateString()}
+                                      </div>
+                                    ) : (
+                                      <span className="text-muted-foreground">Not returned</span>
                                     )}
-                                  </div>
-                                </td>
-                              </tr>
-                            ))}
+                                  </td>
+                                  <td className="p-4">
+                                    <div className="flex flex-col gap-1">
+                                      <Badge variant={getStatusVariant(t.status)} className="backdrop-blur-sm">
+                                        {t.status}
+                                      </Badge>
+                                      {isOverdue(t) && (
+                                        <Badge variant="destructive" className="text-xs backdrop-blur-sm">
+                                          Overdue ({getDaysOverdue(t)} days)
+                                        </Badge>
+                                      )}
+                                    </div>
+                                  </td>
+                                </tr>
+                              );
+                            })}
                           </tbody>
                         </table>
                       </div>
