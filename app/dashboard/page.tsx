@@ -430,6 +430,70 @@ export default function DashboardPage() {
               </Card>
             </div>
 
+            {/* Overdue Books Alert */}
+            {overdueBooks.length > 0 && (
+              <Card className="backdrop-blur-xl border-destructive/50 bg-gradient-to-b from-destructive/5 to-destructive/10 shadow-lg shadow-red-500/10">
+                <CardHeader>
+                  <CardTitle className="text-destructive flex items-center gap-2">
+                    <AlertTriangle className="h-5 w-5" />
+                    Overdue Books - Requires Attention!
+                  </CardTitle>
+                  <CardDescription>
+                    {overdueBooks.length} book{overdueBooks.length !== 1 ? 's' : ''} that need to be returned immediately
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-3">
+                    {overdueBooks.map(book => (
+                      <div key={book.loanId} className="flex items-center justify-between p-4 bg-destructive/10 rounded-lg backdrop-blur-sm border border-destructive/20">
+                        <div className="flex-1">
+                          <p className="font-medium">{book.title}</p>
+                          <p className="text-sm text-muted-foreground">
+                            by {book.author} • Borrowed by {book.borrower}
+                          </p>
+                        </div>
+                        <div className="text-right">
+                          <Badge variant="destructive" className="backdrop-blur-sm">
+                            {book.daysOverdue} day{book.daysOverdue !== 1 ? 's' : ''} overdue
+                          </Badge>
+                          <p className="text-xs text-muted-foreground mt-1">
+                            Due: {new Date(book.dueDate).toLocaleDateString()}
+                          </p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="mt-4">
+                    <Link href="/transactions?filter=overdue">
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        className="w-full bg-transparent backdrop-blur-sm border-destructive/50 hover:bg-destructive/10 text-destructive"
+                      >
+                        <Eye className="mr-2 h-4 w-4" />
+                        View All Overdue Transactions
+                      </Button>
+                    </Link>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* No Overdue Books Message */}
+            {overdueBooks.length === 0 && dashboardStats.overdueBooks === 0 && (
+              <Card className="backdrop-blur-xl border-green-200/50 bg-gradient-to-b from-green-50/10 to-green-50/5 shadow-lg shadow-green-500/10">
+                <CardHeader>
+                  <CardTitle className="text-green-600 flex items-center gap-2">
+                    <TrendingUp className="h-5 w-5" />
+                    All Clear!
+                  </CardTitle>
+                  <CardDescription>
+                    No overdue books. All items are returned on time or not yet due.
+                  </CardDescription>
+                </CardHeader>
+              </Card>
+            )}
+
             {/* Recent Activity & Popular Books */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               {/* Recent Activity */}
@@ -577,70 +641,6 @@ export default function DashboardPage() {
                 </CardContent>
               </Card>
             </div>
-
-            {/* Overdue Books Alert */}
-            {overdueBooks.length > 0 && (
-              <Card className="backdrop-blur-xl border-destructive/50 bg-gradient-to-b from-destructive/5 to-destructive/10 shadow-lg shadow-red-500/10">
-                <CardHeader>
-                  <CardTitle className="text-destructive flex items-center gap-2">
-                    <AlertTriangle className="h-5 w-5" />
-                    Overdue Books - Requires Attention!
-                  </CardTitle>
-                  <CardDescription>
-                    {overdueBooks.length} book{overdueBooks.length !== 1 ? 's' : ''} that need to be returned immediately
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-3">
-                    {overdueBooks.map(book => (
-                      <div key={book.loanId} className="flex items-center justify-between p-4 bg-destructive/10 rounded-lg backdrop-blur-sm border border-destructive/20">
-                        <div className="flex-1">
-                          <p className="font-medium">{book.title}</p>
-                          <p className="text-sm text-muted-foreground">
-                            by {book.author} • Borrowed by {book.borrower}
-                          </p>
-                        </div>
-                        <div className="text-right">
-                          <Badge variant="destructive" className="backdrop-blur-sm">
-                            {book.daysOverdue} day{book.daysOverdue !== 1 ? 's' : ''} overdue
-                          </Badge>
-                          <p className="text-xs text-muted-foreground mt-1">
-                            Due: {new Date(book.dueDate).toLocaleDateString()}
-                          </p>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                  <div className="mt-4">
-                    <Link href="/transactions?filter=overdue">
-                      <Button 
-                        variant="outline" 
-                        size="sm" 
-                        className="w-full bg-transparent backdrop-blur-sm border-destructive/50 hover:bg-destructive/10 text-destructive"
-                      >
-                        <Eye className="mr-2 h-4 w-4" />
-                        View All Overdue Transactions
-                      </Button>
-                    </Link>
-                  </div>
-                </CardContent>
-              </Card>
-            )}
-
-            {/* No Overdue Books Message */}
-            {overdueBooks.length === 0 && dashboardStats.overdueBooks === 0 && (
-              <Card className="backdrop-blur-xl border-green-200/50 bg-gradient-to-b from-green-50/10 to-green-50/5 shadow-lg shadow-green-500/10">
-                <CardHeader>
-                  <CardTitle className="text-green-600 flex items-center gap-2">
-                    <TrendingUp className="h-5 w-5" />
-                    All Clear!
-                  </CardTitle>
-                  <CardDescription>
-                    No overdue books. All items are returned on time or not yet due.
-                  </CardDescription>
-                </CardHeader>
-              </Card>
-            )}
           </div>
         </main>
       </div>
