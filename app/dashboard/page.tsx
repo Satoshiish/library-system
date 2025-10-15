@@ -43,59 +43,79 @@ export default function DashboardPage() {
       if (booksError) console.error("❌ Books fetch error:", booksError)
       else console.log("✅ Books data:", booksData?.length)
 
-      // ✅ FIXED: Try different query approaches
-      let loansData: any[] = []
-      let loansError: any = null
-
-      // Approach 1: Basic loans query
-      const { data: loansData1, error: error1 } = await supabase
-        .from("loans")
-        .select("*")
-        .order("created_at", { ascending: false })
-
-      if (!error1 && loansData1 && loansData1.length > 0) {
-        console.log("✅ Approach 1 - Basic loans data:", loansData1.length)
-        loansData = loansData1
-      } else {
-        console.log("❌ Approach 1 failed:", error1)
-      }
-
-      // Approach 2: Try with joins if basic query works but no nested data
-      if (loansData.length === 0) {
-        const { data: loansData2, error: error2 } = await supabase
-          .from("loans")
-          .select(`
-            *,
-            patrons (*),
-            books (*)
-          `)
-          .order("created_at", { ascending: false })
-
-        if (!error2) {
-          console.log("✅ Approach 2 - Joined loans data:", loansData2?.length)
-          loansData = loansData2 || []
-        } else {
-          console.log("❌ Approach 2 failed:", error2)
-        }
-      }
-
-      // Fetch patrons
+      // Fetch patrons FIRST to ensure we have the data
       const { data: patronsData, error: patronsError } = await supabase
         .from("patrons")
         .select("*")
       if (patronsError) console.error("❌ Patrons fetch error:", patronsError)
       else console.log("✅ Patrons data:", patronsData?.length)
 
-      // 🧩 ADD: Create lookup maps for quick name resolution
-      const bookMap = new Map(booksData?.map(b => [b.id, b]) || [])
+      // Create patron map for quick lookup
       const patronMap = new Map(patronsData?.map(p => [p.id, p]) || [])
+      console.log("🗺️ Patron map created with", patronMap.size, "entries")
 
-      // If Approach 1 ran (no joined data), manually attach book/patron details
-      loansData = loansData.map(loan => ({
-        ...loan,
-        books: loan.books || bookMap.get(loan.book_id) || null,
-        patrons: loan.patrons || patronMap.get(loan.patron_id) || null,
-      }))
+      // ✅ FIXED: Try different query approaches for loans
+      let loansData: any[] = []
+      let loansError: any = null
+
+      // Approach 1: Try with joins first
+      const { data: loansData1, error: error1 } = await supabase
+        .from("loans")
+        .select(`
+          *,
+          patrons (*),
+          books (*)
+        `)
+        .order("created_at", { ascending: false })
+
+      if (!error1 && loansData1 && loansData1.length > 0) {
+        console.log("✅ Approach 1 - Joined loans data:", loansData1.length)
+        loansData = loansData1
+        
+        // Debug: Check if patron data is included
+        if (loansData1[0]?.patrons) {
+          console.log("🔍 First loan patron data:", loansData1[0].patrons)
+        } else {
+          console.log("⚠️ No patron data in joined query")
+        }
+      } else {
+        console.log("❌ Approach 1 failed:", error1)
+        
+        // Approach 2: Basic loans query as fallback
+        const { data: loansData2, error: error2 } = await supabase
+          .from("loans")
+          .select("*")
+          .order("created_at", { ascending: false })
+
+        if (!error2 && loansData2) {
+          console.log("✅ Approach 2 - Basic loans data:", loansData2.length)
+          loansData = loansData2
+        } else {
+          console.log("❌ Approach 2 failed:", error2)
+        }
+      }
+
+      // 🧩 Create book map for quick lookup
+      const bookMap = new Map(booksData?.map(b => [b.id, b]) || [])
+
+      // If we have loans but no joined data, manually attach book/patron details
+      loansData = loansData.map(loan => {
+        const patronFromMap = patronMap.get(loan.patron_id)
+        const bookFromMap = bookMap.get(loan.book_id)
+        
+        console.log(`🔍 Loan ${loan.id}:`, {
+          patron_id: loan.patron_id,
+          hasJoinedPatron: !!loan.patrons,
+          hasMappedPatron: !!patronFromMap,
+          patronName: patronFromMap?.full_name || 'No name found'
+        })
+
+        return {
+          ...loan,
+          books: loan.books || bookFromMap || null,
+          patrons: loan.patrons || patronFromMap || null,
+        }
+      })
 
       // 📊 Calculate stats
       const totalBooks = booksData?.length || 0
@@ -104,7 +124,7 @@ export default function DashboardPage() {
       const reservedBooks = booksData?.filter(b => b.status === "reserved").length || 0
       const totalBorrowers = patronsData?.length || 0
 
-      // ✅ Overdue calculation (same as your version)
+      // ✅ Overdue calculation
       const today = new Date()
       today.setHours(0, 0, 0, 0)
 
@@ -136,18 +156,24 @@ export default function DashboardPage() {
         overdueBooks: overdueBooksCount,
       })
 
-      // ✅ Recent activity (FIXED: uses full_name from patrons)
+      // ✅ Recent activity - IMPROVED patron name resolution
       const recentActivityData = loansData.slice(0, 5).map(loan => {
-        // Get patron name with proper fallbacks
+        // Get patron name with multiple fallbacks
         let borrowerName = `Patron ${loan.patron_id}`;
         
+        // Try joined patron data first
         if (loan.patrons?.full_name) {
           borrowerName = loan.patrons.full_name;
-        } else {
-          // Fallback: look up in patronMap
+          console.log(`✅ Using joined patron data for ${loan.patron_id}: ${borrowerName}`)
+        } 
+        // Fallback to patron map
+        else {
           const patron = patronMap.get(loan.patron_id);
           if (patron?.full_name) {
             borrowerName = patron.full_name;
+            console.log(`✅ Using mapped patron data for ${loan.patron_id}: ${borrowerName}`)
+          } else {
+            console.log(`❌ No patron name found for ${loan.patron_id}`)
           }
         }
 
@@ -155,7 +181,7 @@ export default function DashboardPage() {
           id: loan.id,
           title: loan.books?.title || `Book ${loan.book_id}`,
           author: loan.books?.author || "Unknown Author",
-          borrowerName: borrowerName, // Now uses full_name correctly
+          borrowerName: borrowerName,
           status: loan.status,
           created_at: loan.created_at,
           returned_date: loan.returned_date,
@@ -163,7 +189,7 @@ export default function DashboardPage() {
       })
       setRecentActivity(recentActivityData)
 
-      // Popular books (unchanged)
+      // Popular books
       const checkoutCounts: Record<string, number> = {}
       loansData.forEach(loan => {
         if (loan.book_id) {
@@ -181,7 +207,7 @@ export default function DashboardPage() {
         .slice(0, 5)
       setPopularBooks(popularBooksList)
 
-      // ✅ Overdue books (FIXED: uses full_name from patrons)
+      // ✅ Overdue books - IMPROVED patron name resolution
       const overdueBooksList = overdueLoans.map(loan => {
         const dueDate = loan.due_date
           ? new Date(loan.due_date)
@@ -195,13 +221,12 @@ export default function DashboardPage() {
           Math.ceil((today.getTime() - dueDate.getTime()) / (1000 * 60 * 60 * 24))
         )
 
-        // Get patron name with proper fallbacks
+        // Get patron name with multiple fallbacks
         let borrowerName = `Patron ${loan.patron_id}`;
         
         if (loan.patrons?.full_name) {
           borrowerName = loan.patrons.full_name;
         } else {
-          // Fallback: look up in patronMap
           const patron = patronMap.get(loan.patron_id);
           if (patron?.full_name) {
             borrowerName = patron.full_name;
@@ -212,7 +237,7 @@ export default function DashboardPage() {
           id: loan.id,
           title: loan.books?.title || `Book ${loan.book_id}`,
           author: loan.books?.author || "Unknown Author",
-          borrower: borrowerName, // Now uses full_name correctly
+          borrower: borrowerName,
           dueDate: dueDate.toISOString(),
           daysOverdue,
         }
@@ -220,15 +245,17 @@ export default function DashboardPage() {
       setOverdueBooks(overdueBooksList)
 
       // Debug log to verify patron names are working
-      console.log("🔍 Patron name resolution check:", {
+      console.log("🔍 FINAL Patron name resolution check:", {
         totalLoans: loansData.length,
-        sampleLoan: loansData[0] ? {
-          patron_id: loansData[0].patron_id,
-          patronData: loansData[0].patrons,
-          resolvedName: recentActivityData[0]?.borrowerName
-        } : 'No loans',
-        patronMapSize: patronMap.size
+        totalPatrons: patronsData?.length,
+        patronMapSize: patronMap.size,
+        sampleRecentActivity: recentActivityData[0] ? {
+          loanId: recentActivityData[0].id,
+          borrowerName: recentActivityData[0].borrowerName,
+          hasProperName: !recentActivityData[0].borrowerName.includes('Patron ')
+        } : 'No recent activity'
       })
+
     } catch (err) {
       console.error("❌ Error fetching dashboard data:", err)
     } finally {

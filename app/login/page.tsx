@@ -303,14 +303,6 @@ export default function LoginPage() {
                 <Label htmlFor="password" className="text-sm font-medium text-foreground">
                   Password
                 </Label>
-                <button
-                  type="button"
-                  onClick={handleDemoLogin}
-                  disabled={isLoading}
-                  className="text-xs text-indigo-600 hover:text-indigo-700 underline disabled:opacity-50"
-                >
-                  Use Demo Credentials
-                </button>
               </div>
               <div className="relative">
                 <div className="absolute left-3 top-1/2 transform -translate-y-1/2">
@@ -354,13 +346,6 @@ export default function LoginPage() {
                   </div>
                 )}
               </Button>
-
-              {/* Demo Info */}
-              <div className="text-center">
-                <p className="text-xs text-muted-foreground">
-                  Demo: admin@library.com / demo123
-                </p>
-              </div>
             </div>
           </form>
 
