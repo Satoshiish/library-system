@@ -197,7 +197,7 @@ export default function TransactionsPage() {
     fetchData();
   }, []);
 
-  // Add real-time subscriptions
+  // Add real-time subscriptions - MODIFIED: Only refresh data when modal is closed
   useEffect(() => {
     const loansSubscription = supabase
       .channel('loans-changes')
@@ -210,11 +210,13 @@ export default function TransactionsPage() {
         },
         (payload) => {
           console.log('📖 Real-time loan update:', payload);
-          toast.info("Transactions updated", {
-            description: "Refreshing data..."
-          });
-          // Refresh data
-          fetchData();
+          // Only show toast and refresh if modal is NOT open
+          if (!addTransactionModalOpen) {
+            toast.info("Transactions updated", {
+              description: "Refreshing data..."
+            });
+            fetchData();
+          }
         }
       )
       .subscribe()
@@ -222,14 +224,14 @@ export default function TransactionsPage() {
     return () => {
       loansSubscription.unsubscribe()
     }
-  }, [])
+  }, [addTransactionModalOpen]) // Added dependency
 
   // Reset new loan form
   const resetNewLoanForm = () => {
     setNewLoan({ patron_id: "", book_id: "", due_date: "" })
   }
 
-  // Refresh function
+  // Refresh function - MODIFIED: Don't close modal on refresh
   const fetchData = async () => {
     try {
       setLoading(true);
@@ -575,7 +577,7 @@ export default function TransactionsPage() {
     }
   }
 
-  // Add new transaction with book status validation
+  // Add new transaction with book status validation - FIXED: Modal stays open
   const handleAddTransaction = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!newLoan.patron_id || !newLoan.book_id || !newLoan.due_date) {
@@ -628,25 +630,8 @@ export default function TransactionsPage() {
 
       if (bookUpdateError) throw bookUpdateError
 
-      // Refresh transactions data
-      const { data: refreshedLoans, error: refreshError } = await supabase
-        .from("loans")
-        .select(`
-          *,
-          patrons:patrons!loans_patron_id_fkey ( id, full_name, email ),
-          books:books!loans_book_id_fkey ( id, title, author, isbn, status )
-        `)
-        .order("created_at", { ascending: false })
-
-      if (!refreshError && refreshedLoans) {
-        setTransactions(refreshedLoans)
-      } else {
-        setTransactions(prev => [loanData, ...prev])
-      }
-
-      // Reset form and refresh books data
-      resetNewLoanForm()
-      setAddTransactionModalOpen(false)
+      // Update local state without full refresh to keep modal open
+      setTransactions(prev => [loanData, ...prev])
 
       // Update local books state
       setBooks(prev => {
@@ -658,7 +643,10 @@ export default function TransactionsPage() {
         return updatedBooks;
       })
 
-      toast.success("Transaction added successfully ✅")
+      // Reset form but KEEP modal open for multiple transactions
+      resetNewLoanForm()
+
+      toast.success("Transaction added successfully! ✅ You can add another transaction or close the modal.")
     } catch (error) {
       console.error("❌ Error adding transaction:", error)
       toast.error("Failed to add transaction")
@@ -1729,7 +1717,7 @@ export default function TransactionsPage() {
                     disabled={submitting}
                     className="backdrop-blur-sm border-border/50"
                   >
-                    Cancel
+                    Close
                   </Button>
                   <Button
                     type="submit"
@@ -1753,6 +1741,13 @@ export default function TransactionsPage() {
                       </>
                     )}
                   </Button>
+                </div>
+
+                {/* Success Message */}
+                <div className="text-center">
+                  <p className="text-sm text-muted-foreground">
+                    After adding a transaction, the form will reset so you can add another one.
+                  </p>
                 </div>
               </form>
             </div>
