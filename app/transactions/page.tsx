@@ -62,6 +62,7 @@ export default function TransactionsPage() {
   })
   const [sortConfig, setSortConfig] = useState({ key: "due_date", direction: "asc" })
   const [submitting, setSubmitting] = useState(false)
+  const [activeTab, setActiveTab] = useState("active")
 
   // Fetch data with proper error handling
   useEffect(() => {
@@ -750,27 +751,42 @@ export default function TransactionsPage() {
         <main className="flex-1 lg:ml-64 p-6 space-y-6">
           <div className="max-w-7xl mx-auto space-y-6">
             {/* Header */}
-            <div className="flex justify-between items-center">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
               <div>
-                <h1 className="text-3xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">
+                <h1 className="text-2xl sm:text-3xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">
                   Transactions
                 </h1>
                 <p className="text-muted-foreground">Manage book loans, returns, and overdue items</p>
               </div>
-              <Button 
-                onClick={fetchData} 
-                variant="outline" 
-                size="sm"
-                disabled={loading}
-                className="backdrop-blur-sm border-border/50 hover:bg-green-50 hover:border-green-200"
-              >
-                {loading ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <RefreshCw className="h-4 w-4 mr-2" />
-                )}
-                Refresh
-              </Button>
+              <div className="flex gap-2">
+                <Button 
+                  onClick={fetchData} 
+                  variant="outline" 
+                  size="sm"
+                  disabled={loading}
+                  className="backdrop-blur-sm border-border/50 hover:bg-green-50 hover:border-green-200"
+                >
+                  {loading ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <RefreshCw className="h-4 w-4 mr-2" />
+                  )}
+                  Refresh
+                </Button>
+                <Button 
+                  onClick={() => setActiveTab("new")}
+                  size="sm"
+                  className={cn(
+                    "bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700",
+                    "text-white shadow-lg shadow-indigo-500/25 hover:shadow-indigo-500/40",
+                    "transition-all duration-300 transform hover:scale-[1.02]",
+                    "border-0"
+                  )}
+                >
+                  <Plus className="h-4 w-4 mr-2" />
+                  New Transaction
+                </Button>
+              </div>
             </div>
 
             {/* Stats Cards */}
@@ -852,7 +868,7 @@ export default function TransactionsPage() {
               </Card>
             )}
 
-            <Tabs defaultValue="active" className="space-y-6">
+            <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
               <TabsList className="grid w-full grid-cols-2 lg:grid-cols-4 backdrop-blur-sm bg-background/50 border-border/30">
                 <TabsTrigger 
                   value="active" 
