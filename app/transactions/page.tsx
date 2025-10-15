@@ -897,49 +897,71 @@ export default function TransactionsPage() {
                       Add New Transaction
                     </CardTitle>
                     <CardDescription>
-                      Create a new book loan transaction. 
-                      {borrowers.length > 0 ? ` Showing ${borrowers.length} active patrons only.` : ' No active patrons found.'}
-                      Inactive and archived patrons cannot borrow books.
+                      Create a new book loan transaction.&nbsp;
+                      {borrowers.length > 0
+                        ? `Showing ${borrowers.length} active patrons only.`
+                        : 'No active patrons found.'}
+                      &nbsp;Inactive and archived patrons cannot borrow books.
                     </CardDescription>
                   </CardHeader>
+
                   <CardContent>
                     <form onSubmit={handleAddTransaction} className="space-y-4">
-                      <div className="grid gap-4 md:grid-cols-3">
-                        <div className="space-y-3">
-                          <Label htmlFor="borrower" className="text-sm font-medium text-foreground/80">
+                      {/* Responsive 3-column grid */}
+                      <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+                        {/* Patron Selector */}
+                        <div className="space-y-3 min-w-0">
+                          <Label
+                            htmlFor="borrower"
+                            className="text-sm font-medium text-foreground/80 truncate"
+                          >
                             Patron {borrowers.length > 0 && `(${borrowers.length} active)`}
                           </Label>
+
                           <Select
                             value={newLoan.patron_id}
-                            onValueChange={val => setNewLoan({ ...newLoan, patron_id: val })}
+                            onValueChange={(val) => setNewLoan({ ...newLoan, patron_id: val })}
                           >
-                            <SelectTrigger className="bg-background/50 border-border/50 h-11">
-                              <SelectValue placeholder={borrowers.length > 0 ? "Select active patron" : "No active patrons available"} />
+                            <SelectTrigger className="bg-background/50 border-border/50 h-11 truncate">
+                              <SelectValue
+                                placeholder={
+                                  borrowers.length > 0
+                                    ? 'Select active patron'
+                                    : 'No active patrons available'
+                                }
+                              />
                             </SelectTrigger>
+
                             <SelectContent className="max-h-60 overflow-y-auto">
                               {borrowers.length > 0 ? (
-                                borrowers.map(b => (
-                                  <SelectItem key={b.id} value={b.id} className="py-2">
-                                    <div className="flex flex-col gap-1">
-                                      <div className="flex items-center justify-between">
-                                        <span className="font-medium text-sm">{b.full_name}</span>
-                                        <Badge 
-                                          variant="default" 
-                                          className="text-xs bg-green-100 text-green-800 border-green-200"
+                                borrowers.map((b) => (
+                                  <SelectItem
+                                    key={b.id}
+                                    value={b.id}
+                                    className="py-2 whitespace-normal break-words"
+                                  >
+                                    <div className="flex flex-col gap-1 min-w-0">
+                                      <div className="flex items-center justify-between gap-2">
+                                        <span className="font-medium text-sm truncate">
+                                          {b.full_name}
+                                        </span>
+                                        <Badge
+                                          variant="default"
+                                          className="text-xs bg-green-100 text-green-800 border-green-200 whitespace-nowrap"
                                         >
                                           Active
                                         </Badge>
                                       </div>
                                       {b.email && (
-                                        <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                                          <Mail className="h-3 w-3" />
-                                          {b.email}
+                                        <div className="flex items-center gap-1 text-xs text-muted-foreground truncate">
+                                          <Mail className="h-3 w-3 shrink-0" />
+                                          <span className="truncate">{b.email}</span>
                                         </div>
                                       )}
                                       {b.phone && (
-                                        <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                                          <Phone className="h-3 w-3" />
-                                          {b.phone}
+                                        <div className="flex items-center gap-1 text-xs text-muted-foreground truncate">
+                                          <Phone className="h-3 w-3 shrink-0" />
+                                          <span className="truncate">{b.phone}</span>
                                         </div>
                                       )}
                                     </div>
@@ -952,70 +974,108 @@ export default function TransactionsPage() {
                               )}
                             </SelectContent>
                           </Select>
+
                           {borrowers.length > 0 && (
                             <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
-                              <span className="text-green-600 font-medium">Active: {borrowers.length}</span>
+                              <span className="text-green-600 font-medium">
+                                Active: {borrowers.length}
+                              </span>
                               <span>•</span>
                               <span>Only active patrons can borrow books</span>
                             </div>
                           )}
                         </div>
 
-                        <div className="space-y-3">
-                          <Label htmlFor="book" className="text-sm font-medium text-foreground/80">Book</Label>
+                        {/* Book Selector */}
+                        <div className="space-y-3 min-w-0">
+                          <Label
+                            htmlFor="book"
+                            className="text-sm font-medium text-foreground/80 truncate"
+                          >
+                            Book
+                          </Label>
+
                           <Select
                             value={newLoan.book_id}
-                            onValueChange={val => setNewLoan({ ...newLoan, book_id: val })}
+                            onValueChange={(val) => setNewLoan({ ...newLoan, book_id: val })}
                           >
-                            <SelectTrigger className="bg-background/50 border-border/50 h-11">
+                            <SelectTrigger className="bg-background/50 border-border/50 h-11 truncate">
                               <SelectValue placeholder="Select book" />
                             </SelectTrigger>
-                            <SelectContent>
+
+                            <SelectContent className="max-h-60 overflow-y-auto">
                               {books
-                                .filter(book => book.status === "available")
-                                .map(b => (
-                                <SelectItem key={b.id} value={b.id}>
-                                  <div className="flex flex-col">
-                                    <span className="font-medium">{b.title}</span>
-                                    <span className="text-xs text-muted-foreground">by {b.author}</span>
-                                    {b.isbn && (
-                                      <span className="text-xs text-muted-foreground">ISBN: {b.isbn}</span>
-                                    )}
-                                  </div>
-                                </SelectItem>
-                              ))}
+                                .filter((book) => book.status === 'available')
+                                .map((b) => (
+                                  <SelectItem
+                                    key={b.id}
+                                    value={b.id}
+                                    className="whitespace-normal break-words"
+                                  >
+                                    <div className="flex flex-col gap-0.5 min-w-0">
+                                      <span className="font-medium text-sm truncate">
+                                        {b.title}
+                                      </span>
+                                      <span className="text-xs text-muted-foreground truncate">
+                                        by {b.author}
+                                      </span>
+                                      {b.isbn && (
+                                        <span className="text-xs text-muted-foreground truncate">
+                                          ISBN: {b.isbn}
+                                        </span>
+                                      )}
+                                    </div>
+                                  </SelectItem>
+                                ))}
                             </SelectContent>
                           </Select>
-                          <p className="text-xs text-muted-foreground">
-                            Showing {books.filter(b => b.status === "available").length} available book{books.filter(b => b.status === "available").length !== 1 ? 's' : ''}
+
+                          <p className="text-xs text-muted-foreground truncate">
+                            Showing{' '}
+                            {
+                              books.filter((b) => b.status === 'available').length
+                            }{' '}
+                            available book
+                            {books.filter((b) => b.status === 'available').length !== 1
+                              ? 's'
+                              : ''}
                           </p>
                         </div>
 
-                        <div className="space-y-3">
-                          <Label htmlFor="due_date" className="text-sm font-medium text-foreground/80">Due Date</Label>
+                        {/* Due Date */}
+                        <div className="space-y-3 min-w-0">
+                          <Label
+                            htmlFor="due_date"
+                            className="text-sm font-medium text-foreground/80 truncate"
+                          >
+                            Due Date
+                          </Label>
                           <div className="relative">
                             <Calendar className="absolute left-3 top-3 h-4 w-4 text-indigo-600" />
                             <Input
                               type="date"
                               value={newLoan.due_date}
-                              onChange={e => setNewLoan({ ...newLoan, due_date: e.target.value })}
+                              onChange={(e) =>
+                                setNewLoan({ ...newLoan, due_date: e.target.value })
+                              }
                               min={new Date().toISOString().split('T')[0]}
-                              className="pl-11 bg-background/50 border-border/50 focus:border-indigo-300 transition-colors h-11"
+                              className="pl-11 bg-background/50 border-border/50 focus:border-indigo-300 transition-colors h-11 w-full truncate"
                             />
                           </div>
                         </div>
                       </div>
 
+                      {/* Submit button */}
                       <div className="flex justify-end">
-                        <Button 
-                          type="submit" 
+                        <Button
+                          type="submit"
                           disabled={submitting || borrowers.length === 0}
                           className={cn(
-                            "bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700",
-                            "text-white shadow-lg shadow-indigo-500/25 hover:shadow-indigo-500/40",
-                            "transition-all duration-300 transform hover:scale-[1.02]",
-                            "border-0 h-11",
-                            borrowers.length === 0 && "opacity-50 cursor-not-allowed"
+                            'bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700',
+                            'text-white shadow-lg shadow-indigo-500/25 hover:shadow-indigo-500/40',
+                            'transition-all duration-300 transform hover:scale-[1.02]',
+                            'border-0 h-11',
+                            borrowers.length === 0 && 'opacity-50 cursor-not-allowed'
                           )}
                         >
                           {submitting ? (
@@ -1026,7 +1086,9 @@ export default function TransactionsPage() {
                           ) : (
                             <>
                               <Plus className="h-4 w-4 mr-2" />
-                              {borrowers.length === 0 ? "No Active Patrons" : "Add Transaction"}
+                              {borrowers.length === 0
+                                ? 'No Active Patrons'
+                                : 'Add Transaction'}
                             </>
                           )}
                         </Button>
