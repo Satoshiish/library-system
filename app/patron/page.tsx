@@ -10,7 +10,7 @@ import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { toast } from "sonner"
 import { supabase } from "@/lib/supabaseClient"
-import { Plus, Edit, Archive, User, Mail, Phone, Calendar, Search, Users, Save, X, Loader2, Trash2, RotateCcw } from "lucide-react"
+import { Plus, Edit, Archive, User, Mail, Phone, Calendar, Search, Users, Save, X, Loader2, Trash2, RotateCcw, AlertTriangle } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { AuthGuard } from "@/components/auth-guard"
 
@@ -37,6 +37,8 @@ export default function PatronPage() {
   const [patronToArchive, setPatronToArchive] = useState<Patron | null>(null)
   const [restoreConfirmOpen, setRestoreConfirmOpen] = useState(false)
   const [patronToRestore, setPatronToRestore] = useState<Patron | null>(null)
+  const [permanentDeleteConfirmOpen, setPermanentDeleteConfirmOpen] = useState(false)
+  const [patronToPermanentDelete, setPatronToPermanentDelete] = useState<Patron | null>(null)
 
   // Fetch patrons
   useEffect(() => {
@@ -173,7 +175,7 @@ export default function PatronPage() {
     setPatronToRestore(null)
   }
 
-  // Delete patron with confirmation
+  // Delete patron with confirmation (soft delete - archive)
   const confirmDelete = (patron: Patron) => {
     setPatronToDelete(patron)
     setDeleteConfirmOpen(true)
@@ -185,19 +187,48 @@ export default function PatronPage() {
     setSubmitting(true)
     const { error } = await supabase
       .from("patrons")
-      .delete()
+      .update({ status: "archived" })
       .eq("id", patronToDelete.id)
 
     if (error) {
-      console.error("Error deleting patron:", error)
-      toast.error("Failed to delete patron")
+      console.error("Error archiving patron:", error)
+      toast.error("Failed to archive patron")
     } else {
-      setPatrons(prev => prev.filter(p => p.id !== patronToDelete.id))
-      toast.success("Patron deleted successfully! 🗑️")
+      setPatrons(prev => prev.map(p => 
+        p.id === patronToDelete.id ? { ...p, status: "archived" } : p
+      ))
+      toast.success("Patron archived successfully! 📁")
     }
     setSubmitting(false)
     setDeleteConfirmOpen(false)
     setPatronToDelete(null)
+  }
+
+  // Permanent delete patron with confirmation
+  const confirmPermanentDelete = (patron: Patron) => {
+    setPatronToPermanentDelete(patron)
+    setPermanentDeleteConfirmOpen(true)
+  }
+
+  const handlePermanentDelete = async () => {
+    if (!patronToPermanentDelete) return
+    
+    setSubmitting(true)
+    const { error } = await supabase
+      .from("patrons")
+      .delete()
+      .eq("id", patronToPermanentDelete.id)
+
+    if (error) {
+      console.error("Error permanently deleting patron:", error)
+      toast.error("Failed to permanently delete patron")
+    } else {
+      setPatrons(prev => prev.filter(p => p.id !== patronToPermanentDelete.id))
+      toast.success("Patron permanently deleted successfully! 🗑️")
+    }
+    setSubmitting(false)
+    setPermanentDeleteConfirmOpen(false)
+    setPatronToPermanentDelete(null)
   }
 
   // Save edited patron
@@ -422,7 +453,7 @@ export default function PatronPage() {
                 </CardTitle>
                 <CardDescription>
                   {showArchived 
-                    ? "Manage archived library members" 
+                    ? "Manage archived library members - restore or permanently delete accounts" 
                     : "Find patrons by name or email"
                   }
                 </CardDescription>
@@ -473,6 +504,12 @@ export default function PatronPage() {
                   <CardTitle className="bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">
                     {showArchived ? "Archived Patrons" : "Active Patrons"} ({filteredPatrons.length})
                   </CardTitle>
+                  {showArchived && (
+                    <CardDescription className="text-orange-600 flex items-center gap-2">
+                      <AlertTriangle className="h-4 w-4" />
+                      Warning: Permanent deletion cannot be undone and will remove all patron data permanently.
+                    </CardDescription>
+                  )}
                 </CardHeader>
                 <CardContent className="p-0">
                   <div className="overflow-x-auto">
@@ -619,14 +656,16 @@ export default function PatronPage() {
                                         variant="outline" 
                                         onClick={() => confirmRestore(p)}
                                         className="backdrop-blur-sm border-border/50 hover:bg-green-50 hover:border-green-200 text-green-600"
+                                        title="Restore to active status"
                                       >
                                         <RotateCcw className="h-4 w-4" />
                                       </Button>
                                       <Button 
                                         size="sm" 
                                         variant="outline" 
-                                        onClick={() => confirmDelete(p)}
+                                        onClick={() => confirmPermanentDelete(p)}
                                         className="backdrop-blur-sm border-border/50 hover:bg-red-50 hover:border-red-200 text-red-600"
+                                        title="Permanently delete patron"
                                       >
                                         <Trash2 className="h-4 w-4" />
                                       </Button>
@@ -709,19 +748,28 @@ export default function PatronPage() {
           </div>
         )}
 
-        {/* Delete Confirmation Modal */}
-        {deleteConfirmOpen && (
+        {/* Permanent Delete Confirmation Modal */}
+        {permanentDeleteConfirmOpen && (
           <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50">
             <div className="backdrop-blur-xl border-border/30 bg-gradient-to-b from-background/95 to-background/90 p-6 rounded-lg w-96 relative shadow-2xl shadow-indigo-500/10">
-              <h3 className="text-lg font-semibold mb-2 text-red-600">Delete Patron</h3>
+              <div className="flex items-center gap-3 mb-4">
+                <AlertTriangle className="h-6 w-6 text-red-600" />
+                <h3 className="text-lg font-semibold text-red-600">Permanently Delete Patron</h3>
+              </div>
+              <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-4">
+                <p className="text-sm text-red-800 font-medium mb-2">⚠️ This action cannot be undone!</p>
+                <p className="text-sm text-red-700">
+                  You are about to permanently delete "<strong>{patronToPermanentDelete?.full_name}</strong>". 
+                  This will remove all their data from the system including any associated records.
+                </p>
+              </div>
               <p className="text-sm text-muted-foreground mb-4">
-                Are you sure you want to permanently delete "<strong>{patronToDelete?.full_name}</strong>"?
-                This action cannot be undone and will remove all their data.
+                Are you absolutely sure you want to proceed with permanent deletion?
               </p>
               <div className="flex justify-end gap-3">
                 <Button 
                   variant="outline" 
-                  onClick={() => setDeleteConfirmOpen(false)}
+                  onClick={() => setPermanentDeleteConfirmOpen(false)}
                   disabled={submitting}
                   className="backdrop-blur-sm border-border/50"
                 >
@@ -729,12 +777,18 @@ export default function PatronPage() {
                 </Button>
                 <Button 
                   variant="destructive" 
-                  onClick={handleDelete}
+                  onClick={handlePermanentDelete}
                   disabled={submitting}
                   className="backdrop-blur-sm"
                 >
-                  {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4 mr-2" />}
-                  Delete
+                  {submitting ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <>
+                      <Trash2 className="h-4 w-4 mr-2" />
+                      Delete Permanently
+                    </>
+                  )}
                 </Button>
               </div>
             </div>
