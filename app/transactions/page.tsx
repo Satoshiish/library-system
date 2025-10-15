@@ -716,151 +716,151 @@ export default function TransactionsPage() {
 
               {/* New Transaction Tab */}
               <TabsContent value="new" className="space-y-6">
-  <Card className="backdrop-blur-xl border-border/30 bg-gradient-to-b from-background/95 to-background/90 shadow-lg shadow-indigo-500/10">
-    <CardHeader>
-      <CardTitle className="bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">
-        Add New Transaction
-      </CardTitle>
-      <CardDescription>
-        Create a new book loan transaction. 
-        {borrowers.length > 0 ? ` Showing all ${borrowers.length} patrons.` : ' No patrons found.'}
-      </CardDescription>
-    </CardHeader>
-    <CardContent>
-      <form onSubmit={handleAddTransaction} className="space-y-4">
-        <div className="grid gap-4 md:grid-cols-3">
-          <div className="space-y-3">
-            <Label htmlFor="borrower" className="text-sm font-medium text-foreground/80">
-              Patron {borrowers.length > 0 && `(${borrowers.length} total)`}
-            </Label>
-            <Select
-              value={newLoan.patron_id}
-              onValueChange={val => setNewLoan({ ...newLoan, patron_id: val })}
-            >
-              <SelectTrigger className="bg-background/50 border-border/50 h-11">
-                <SelectValue placeholder={borrowers.length > 0 ? "Select patron" : "No patrons available"} />
-              </SelectTrigger>
-              <SelectContent className="max-h-60 overflow-y-auto">
-                {borrowers.length > 0 ? (
-                  borrowers.map(b => (
-                    <SelectItem key={b.id} value={b.id} className="py-2">
-                      <div className="flex flex-col gap-1">
-                        <div className="flex items-center justify-between">
-                          <span className="font-medium text-sm">{b.full_name}</span>
-                          <Badge 
-                            variant={b.status === "active" ? "default" : "secondary"} 
-                            className="text-xs"
-                          >
-                            {b.status || "unknown"}
-                          </Badge>
-                        </div>
-                        {b.email && (
-                          <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                            <Mail className="h-3 w-3" />
-                            {b.email}
-                          </div>
-                        )}
-                        {b.phone && (
-                          <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                            <Phone className="h-3 w-3" />
-                            {b.phone}
+              <Card className="backdrop-blur-xl border-border/30 bg-gradient-to-b from-background/95 to-background/90 shadow-lg shadow-indigo-500/10">
+                <CardHeader>
+                  <CardTitle className="bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">
+                    Add New Transaction
+                  </CardTitle>
+                  <CardDescription>
+                    Create a new book loan transaction. 
+                    {borrowers.length > 0 ? ` Showing all ${borrowers.length} patrons.` : ' No patrons found.'}
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <form onSubmit={handleAddTransaction} className="space-y-4">
+                    <div className="grid gap-4 md:grid-cols-3">
+                      <div className="space-y-3">
+                        <Label htmlFor="borrower" className="text-sm font-medium text-foreground/80">
+                          Patron {borrowers.length > 0 && `(${borrowers.length} total)`}
+                        </Label>
+                        <Select
+                          value={newLoan.patron_id}
+                          onValueChange={val => setNewLoan({ ...newLoan, patron_id: val })}
+                        >
+                          <SelectTrigger className="bg-background/50 border-border/50 h-11">
+                            <SelectValue placeholder={borrowers.length > 0 ? "Select patron" : "No patrons available"} />
+                          </SelectTrigger>
+                          <SelectContent className="max-h-60 overflow-y-auto">
+                            {borrowers.length > 0 ? (
+                              borrowers.map(b => (
+                                <SelectItem key={b.id} value={b.id} className="py-2">
+                                  <div className="flex flex-col gap-1">
+                                    <div className="flex items-center justify-between">
+                                      <span className="font-medium text-sm">{b.full_name}</span>
+                                      <Badge 
+                                        variant={b.status === "active" ? "default" : "secondary"} 
+                                        className="text-xs"
+                                      >
+                                        {b.status || "unknown"}
+                                      </Badge>
+                                    </div>
+                                    {b.email && (
+                                      <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                                        <Mail className="h-3 w-3" />
+                                        {b.email}
+                                      </div>
+                                    )}
+                                    {b.phone && (
+                                      <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                                        <Phone className="h-3 w-3" />
+                                        {b.phone}
+                                      </div>
+                                    )}
+                                  </div>
+                                </SelectItem>
+                              ))
+                            ) : (
+                              <SelectItem value="no-patrons" disabled>
+                                No patrons available
+                              </SelectItem>
+                            )}
+                          </SelectContent>
+                        </Select>
+                        {borrowers.length > 0 && (
+                          <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
+                            <span>Active: {borrowers.filter(b => b.status === 'active').length}</span>
+                            <span>•</span>
+                            <span>Inactive: {borrowers.filter(b => b.status === 'inactive').length}</span>
+                            <span>•</span>
+                            <span>Archived: {borrowers.filter(b => b.status === 'archived').length}</span>
+                            <span>•</span>
+                            <span>Total: {borrowers.length}</span>
                           </div>
                         )}
                       </div>
-                    </SelectItem>
-                  ))
-                ) : (
-                  <SelectItem value="no-patrons" disabled>
-                    No patrons available
-                  </SelectItem>
-                )}
-              </SelectContent>
-            </Select>
-            {borrowers.length > 0 && (
-              <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
-                <span>Active: {borrowers.filter(b => b.status === 'active').length}</span>
-                <span>•</span>
-                <span>Inactive: {borrowers.filter(b => b.status === 'inactive').length}</span>
-                <span>•</span>
-                <span>Archived: {borrowers.filter(b => b.status === 'archived').length}</span>
-                <span>•</span>
-                <span>Total: {borrowers.length}</span>
-              </div>
-            )}
-          </div>
 
-          <div className="space-y-3">
-            <Label htmlFor="book" className="text-sm font-medium text-foreground/80">Book</Label>
-            <Select
-              value={newLoan.book_id}
-              onValueChange={val => setNewLoan({ ...newLoan, book_id: val })}
-            >
-              <SelectTrigger className="bg-background/50 border-border/50 h-11">
-                <SelectValue placeholder="Select book" />
-              </SelectTrigger>
-              <SelectContent>
-                {books.map(b => (
-                  <SelectItem key={b.id} value={b.id}>
-                    <div className="flex flex-col">
-                      <span className="font-medium">{b.title}</span>
-                      <span className="text-xs text-muted-foreground">by {b.author}</span>
-                      {b.isbn && (
-                        <span className="text-xs text-muted-foreground">ISBN: {b.isbn}</span>
-                      )}
+                      <div className="space-y-3">
+                        <Label htmlFor="book" className="text-sm font-medium text-foreground/80">Book</Label>
+                        <Select
+                          value={newLoan.book_id}
+                          onValueChange={val => setNewLoan({ ...newLoan, book_id: val })}
+                        >
+                          <SelectTrigger className="bg-background/50 border-border/50 h-11">
+                            <SelectValue placeholder="Select book" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {books.map(b => (
+                              <SelectItem key={b.id} value={b.id}>
+                                <div className="flex flex-col">
+                                  <span className="font-medium">{b.title}</span>
+                                  <span className="text-xs text-muted-foreground">by {b.author}</span>
+                                  {b.isbn && (
+                                    <span className="text-xs text-muted-foreground">ISBN: {b.isbn}</span>
+                                  )}
+                                </div>
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <p className="text-xs text-muted-foreground">
+                          Showing {books.length} available book{books.length !== 1 ? 's' : ''}
+                        </p>
+                      </div>
+
+                      <div className="space-y-3">
+                        <Label htmlFor="due_date" className="text-sm font-medium text-foreground/80">Due Date</Label>
+                        <div className="relative">
+                          <Calendar className="absolute left-3 top-3 h-4 w-4 text-indigo-600" />
+                          <Input
+                            type="date"
+                            value={newLoan.due_date}
+                            onChange={e => setNewLoan({ ...newLoan, due_date: e.target.value })}
+                            min={new Date().toISOString().split('T')[0]}
+                            className="pl-11 bg-background/50 border-border/50 focus:border-indigo-300 transition-colors h-11"
+                          />
+                        </div>
+                      </div>
                     </div>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <p className="text-xs text-muted-foreground">
-              Showing {books.length} available book{books.length !== 1 ? 's' : ''}
-            </p>
-          </div>
 
-          <div className="space-y-3">
-            <Label htmlFor="due_date" className="text-sm font-medium text-foreground/80">Due Date</Label>
-            <div className="relative">
-              <Calendar className="absolute left-3 top-3 h-4 w-4 text-indigo-600" />
-              <Input
-                type="date"
-                value={newLoan.due_date}
-                onChange={e => setNewLoan({ ...newLoan, due_date: e.target.value })}
-                min={new Date().toISOString().split('T')[0]}
-                className="pl-11 bg-background/50 border-border/50 focus:border-indigo-300 transition-colors h-11"
-              />
-            </div>
-          </div>
-        </div>
-
-        <div className="flex justify-end">
-          <Button 
-            type="submit" 
-            disabled={submitting || borrowers.length === 0}
-            className={cn(
-              "bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700",
-              "text-white shadow-lg shadow-indigo-500/25 hover:shadow-indigo-500/40",
-              "transition-all duration-300 transform hover:scale-[1.02]",
-              "border-0 h-11",
-              borrowers.length === 0 && "opacity-50 cursor-not-allowed"
-            )}
-          >
-            {submitting ? (
-              <>
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                Adding...
-              </>
-            ) : (
-              <>
-                <Plus className="h-4 w-4 mr-2" />
-                Add Transaction
-              </>
-            )}
-          </Button>
-        </div>
-      </form>
-    </CardContent>
-  </Card>
-</TabsContent>
+                    <div className="flex justify-end">
+                      <Button 
+                        type="submit" 
+                        disabled={submitting || borrowers.length === 0}
+                        className={cn(
+                          "bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700",
+                          "text-white shadow-lg shadow-indigo-500/25 hover:shadow-indigo-500/40",
+                          "transition-all duration-300 transform hover:scale-[1.02]",
+                          "border-0 h-11",
+                          borrowers.length === 0 && "opacity-50 cursor-not-allowed"
+                        )}
+                      >
+                        {submitting ? (
+                          <>
+                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                            Adding...
+                          </>
+                        ) : (
+                          <>
+                            <Plus className="h-4 w-4 mr-2" />
+                            Add Transaction
+                          </>
+                        )}
+                      </Button>
+                    </div>
+                  </form>
+                </CardContent>
+              </Card>
+            </TabsContent>
 
               {/* Active Transactions Tab */}
               <TabsContent value="active" className="space-y-6">
@@ -918,124 +918,149 @@ export default function TransactionsPage() {
 
                 {/* Active Transactions Table */}
                 {loading ? (
-                  <div className="text-center py-8">
-                    <Loader2 className="h-8 w-8 animate-spin text-indigo-600 mx-auto mb-4" />
-                    <p className="text-muted-foreground">Loading transactions...</p>
-                  </div>
-                ) : filteredTransactions.length === 0 ? (
-                  <Card className="backdrop-blur-xl border-border/30 text-center py-8">
-                    <Activity className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                    <h3 className="text-lg font-medium text-foreground mb-2">No active transactions found</h3>
-                    <p className="text-muted-foreground">Try adjusting your search criteria or create a new transaction.</p>
-                  </Card>
-                ) : (
-                  <Card className="backdrop-blur-xl border-border/30 bg-gradient-to-b from-background/95 to-background/90 shadow-lg shadow-indigo-500/10 overflow-hidden">
-                    <CardHeader>
-                      <CardTitle className="bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">
-                        Active Transactions ({filteredTransactions.length})
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent className="p-0">
-                      <div className="overflow-x-auto">
-                        <table className="w-full text-sm">
-                          <thead className="bg-muted/30 backdrop-blur-sm border-b border-border/30">
-                            <tr className="text-left">
-                              <th className="p-4 font-medium text-foreground/80">Borrower</th>
-                              <th className="p-4 font-medium text-foreground/80">Book</th>
-                              <th className="p-4 font-medium text-foreground/80">Due Date</th>
-                              <th className="p-4 font-medium text-foreground/80">Status</th>
-                              <th className="p-4 font-medium text-foreground/80 text-right">Actions</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {filteredTransactions.map(t => (
+                <div className="text-center py-8">
+                  <Loader2 className="h-8 w-8 animate-spin text-indigo-600 mx-auto mb-4" />
+                  <p className="text-muted-foreground">Loading transactions...</p>
+                </div>
+              ) : filteredTransactions.length === 0 ? (
+                <Card className="backdrop-blur-xl border-border/30 text-center py-8">
+                  <Activity className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                  <h3 className="text-lg font-medium text-foreground mb-2">No active transactions found</h3>
+                  <p className="text-muted-foreground">Try adjusting your search criteria or create a new transaction.</p>
+                </Card>
+              ) : (
+                <Card className="backdrop-blur-xl border-border/30 bg-gradient-to-b from-background/95 to-background/90 shadow-lg shadow-indigo-500/10 overflow-hidden">
+                  <CardHeader>
+                    <CardTitle className="bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">
+                      Active Transactions ({filteredTransactions.length})
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="p-0">
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead className="bg-muted/30 backdrop-blur-sm border-b border-border/30">
+                          <tr className="text-left">
+                            <th className="p-4 font-medium text-foreground/80">Patron</th>
+                            <th className="p-4 font-medium text-foreground/80">Book</th>
+                            <th className="p-4 font-medium text-foreground/80">Due Date</th>
+                            <th className="p-4 font-medium text-foreground/80">Status</th>
+                            <th className="p-4 font-medium text-foreground/80 text-right">Actions</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {filteredTransactions.map(t => {
+                            const borrowerName = getBorrowerName(t);
+                            const bookTitle = getBookTitle(t);
+                            const isTransactionOverdue = isOverdue(t);
+                            const overdueStatus = getOverdueStatus(t);
+                            const overdueSeverity = getOverdueSeverity(t);
+                            
+                            return (
                               <tr 
                                 key={t.id} 
                                 className={cn(
                                   "border-b border-border/30 hover:bg-muted/20 transition-colors",
-                                  isOverdue(t) && "bg-red-50/50 hover:bg-red-100/50"
+                                  isTransactionOverdue && "bg-red-50/50 hover:bg-red-100/50"
                                 )}
                               >
                                 <td className="p-4 font-medium">
                                   <div className="flex items-center gap-2">
-                                    {isOverdue(t) && <AlertTriangle className="h-4 w-4 text-red-500" />}
+                                    {isTransactionOverdue && <AlertTriangle className="h-4 w-4 text-red-500" />}
                                     <User className="h-4 w-4 text-indigo-600" />
-                                    {getBorrowerName(t)}
+                                    <div>
+                                      <div className="font-medium">{borrowerName}</div>
+                                      {t.patrons?.email && (
+                                        <div className="text-xs text-muted-foreground flex items-center gap-1">
+                                          <Mail className="h-3 w-3" />
+                                          {t.patrons.email}
+                                        </div>
+                                      )}
+                                    </div>
                                   </div>
                                 </td>
                                 <td className="p-4">
                                   <div className="flex items-center gap-2">
                                     <Book className="h-4 w-4 text-indigo-600" />
-                                    {getBookTitle(t)}
+                                    <div>
+                                      <div className="font-medium">{bookTitle}</div>
+                                      {t.books?.author && (
+                                        <div className="text-xs text-muted-foreground">by {t.books.author}</div>
+                                      )}
+                                    </div>
                                   </div>
                                 </td>
                                 <td className="p-4">
                                   <div className="flex items-center gap-2">
                                     <Calendar className="h-4 w-4 text-indigo-600" />
-                                    {new Date(t.due_date).toLocaleDateString()}
-                                    {isOverdue(t) && (
-                                      <Badge variant={getOverdueSeverity(t)} className="ml-2 text-xs backdrop-blur-sm">
-                                        {getOverdueStatus(t)}
-                                      </Badge>
-                                    )}
+                                    <div>
+                                      <div>{new Date(t.due_date).toLocaleDateString()}</div>
+                                      {isTransactionOverdue && (
+                                        <Badge variant={overdueSeverity} className="mt-1 text-xs backdrop-blur-sm">
+                                          {overdueStatus}
+                                        </Badge>
+                                      )}
+                                    </div>
                                   </div>
                                 </td>
                                 <td className="p-4">
                                   <div className="flex flex-col gap-1">
                                     <Badge 
                                       variant={getStatusVariant(t.status)} 
-                                      className="backdrop-blur-sm"
+                                      className="backdrop-blur-sm w-fit"
                                     >
                                       {t.status}
                                     </Badge>
-                                    {isOverdue(t) && (
-                                      <Badge variant="destructive" className="text-xs backdrop-blur-sm">
+                                    {isTransactionOverdue && (
+                                      <Badge variant="destructive" className="text-xs backdrop-blur-sm w-fit">
                                         Overdue
                                       </Badge>
                                     )}
                                   </div>
                                 </td>
-                                <td className="p-4 text-right flex gap-2 justify-end">
-                                  {t.status === "borrowed" && (
-                                    <Button 
-                                      size="sm" 
-                                      variant="outline" 
-                                      onClick={() => markAsActive(t.id)}
-                                      className="backdrop-blur-sm border-border/50 hover:bg-blue-50 hover:border-blue-200"
-                                    >
-                                      Activate
-                                    </Button>
-                                  )}
-                                  {t.status !== "returned" && (
-                                    <Button 
-                                      size="sm" 
-                                      variant="outline" 
-                                      onClick={() => markAsReturned(t.id)}
-                                      className="backdrop-blur-sm border-border/50 hover:bg-green-50 hover:border-green-200"
-                                    >
-                                      Mark Returned
-                                    </Button>
-                                  )}
-                                  {isOverdue(t) && (
-                                    <Button 
-                                      size="sm" 
-                                      variant="destructive" 
-                                      onClick={() => sendOverdueReminder(t)}
-                                      className="backdrop-blur-sm"
-                                    >
-                                      <Mail className="h-4 w-4 mr-2" />
-                                      Reminder
-                                    </Button>
-                                  )}
+                                <td className="p-4 text-right">
+                                  <div className="flex gap-2 justify-end">
+                                    {t.status === "borrowed" && (
+                                      <Button 
+                                        size="sm" 
+                                        variant="outline" 
+                                        onClick={() => markAsActive(t.id)}
+                                        className="backdrop-blur-sm border-border/50 hover:bg-blue-50 hover:border-blue-200"
+                                      >
+                                        Activate
+                                      </Button>
+                                    )}
+                                    {t.status !== "returned" && (
+                                      <Button 
+                                        size="sm" 
+                                        variant="outline" 
+                                        onClick={() => markAsReturned(t.id)}
+                                        className="backdrop-blur-sm border-border/50 hover:bg-green-50 hover:border-green-200"
+                                      >
+                                        Mark Returned
+                                      </Button>
+                                    )}
+                                    {isTransactionOverdue && (
+                                      <Button 
+                                        size="sm" 
+                                        variant="destructive" 
+                                        onClick={() => sendOverdueReminder(t)}
+                                        className="backdrop-blur-sm"
+                                      >
+                                        <Mail className="h-4 w-4 mr-2" />
+                                        Reminder
+                                      </Button>
+                                    )}
+                                  </div>
                                 </td>
                               </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                    </CardContent>
-                  </Card>
-                )}
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
               </TabsContent>
 
               {/* Overdue Items Tab */}
