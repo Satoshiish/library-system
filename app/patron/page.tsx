@@ -56,47 +56,18 @@ export default function PatronPage() {
     setLoading(false)
   }
 
-  // Validate phone number (only numbers and max 11 digits for Philippine numbers)
+  // Validate phone number (only numbers)
   const validatePhoneNumber = (phone: string) => {
     if (!phone) return true // Empty is allowed
-    
-    // Remove all non-digit characters for validation
-    const digitsOnly = phone.replace(/\D/g, '')
-    
-    // Check if it contains only numbers and common phone symbols
-    const phoneRegex = /^[0-9+\-\s()]*$/
-    if (!phoneRegex.test(phone)) {
-      return false
-    }
-    
-    // Check if it exceeds 11 digits (Philippine standard)
-    if (digitsOnly.length > 11) {
-      return false
-    }
-    
-    return true
+    const phoneRegex = /^[0-9+\-\s()]*$/ // Only numbers and common phone symbols
+    return phoneRegex.test(phone)
   }
 
-  // Format phone number input with max 11 digits
+  // Format phone number input
   const handlePhoneInput = (value: string) => {
     // Remove any non-numeric characters except +, -, (, )
-    let cleaned = value.replace(/[^\d+\-()\s]/g, '')
-    
-    // Remove all non-digit characters to check length
-    const digitsOnly = cleaned.replace(/\D/g, '')
-    
-    // Limit to 11 digits for Philippine phone numbers
-    if (digitsOnly.length > 11) {
-      // If exceeds 11 digits, truncate to 11 digits
-      cleaned = cleaned.slice(0, cleaned.length - (digitsOnly.length - 11))
-    }
-    
+    const cleaned = value.replace(/[^\d+\-()\s]/g, '')
     return cleaned
-  }
-
-  // Get digit count for validation messages
-  const getDigitCount = (phone: string) => {
-    return phone.replace(/\D/g, '').length
   }
 
   // Add new patron
@@ -116,12 +87,7 @@ export default function PatronPage() {
 
     // Validate phone number
     if (newPatron.phone && !validatePhoneNumber(newPatron.phone)) {
-      const digitCount = getDigitCount(newPatron.phone)
-      if (digitCount > 11) {
-        toast.error("Phone number cannot exceed 11 digits (Philippine standard)")
-      } else {
-        toast.error("Invalid phone number. Please use numbers only with optional +, -, (, )")
-      }
+      toast.error("Invalid phone number. Please use numbers only with optional +, -, (, )")
       return
     }
 
@@ -283,12 +249,7 @@ export default function PatronPage() {
 
     // Validate phone number
     if (editingPatron.phone && !validatePhoneNumber(editingPatron.phone)) {
-      const digitCount = getDigitCount(editingPatron.phone)
-      if (digitCount > 11) {
-        toast.error("Phone number cannot exceed 11 digits (Philippine standard)")
-      } else {
-        toast.error("Invalid phone number. Please use numbers only with optional +, -, (, )")
-      }
+      toast.error("Invalid phone number. Please use numbers only with optional +, -, (, )")
       return
     }
 
@@ -408,6 +369,82 @@ export default function PatronPage() {
               </Card>
             </div>
 
+            {/* Add Patron Form - Only show for active view */}
+            {!showArchived && (
+              <Card className="backdrop-blur-xl border-border/30 bg-gradient-to-b from-background/95 to-background/90 shadow-lg shadow-indigo-500/10">
+                <CardHeader>
+                  <CardTitle className="bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">
+                    Add New Patron
+                  </CardTitle>
+                  <CardDescription>Create a new library member account</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <form onSubmit={handleAddPatron} className="space-y-4">
+                    <div className="grid gap-4 md:grid-cols-3">
+                      <div className="space-y-3">
+                        <Label htmlFor="full_name" className="text-sm font-medium text-foreground/80">Full Name *</Label>
+                        <Input
+                          id="full_name"
+                          value={newPatron.full_name}
+                          onChange={e => setNewPatron({ ...newPatron, full_name: e.target.value })}
+                          placeholder="John Doe"
+                          className="bg-background/50 border-border/50 focus:border-indigo-300 transition-colors h-11"
+                          required
+                        />
+                      </div>
+                      <div className="space-y-3">
+                        <Label htmlFor="email" className="text-sm font-medium text-foreground/80">Email *</Label>
+                        <Input
+                          id="email"
+                          value={newPatron.email}
+                          onChange={e => setNewPatron({ ...newPatron, email: e.target.value })}
+                          type="email"
+                          placeholder="john@example.com"
+                          className="bg-background/50 border-border/50 focus:border-indigo-300 transition-colors h-11"
+                          required
+                        />
+                      </div>
+                      <div className="space-y-3">
+                        <Label htmlFor="phone" className="text-sm font-medium text-foreground/80">Phone</Label>
+                        <Input
+                          id="phone"
+                          value={newPatron.phone}
+                          onChange={e => setNewPatron({ ...newPatron, phone: handlePhoneInput(e.target.value) })}
+                          placeholder="123-456-7890"
+                          className="bg-background/50 border-border/50 focus:border-indigo-300 transition-colors h-11"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="flex justify-end">
+                      <Button 
+                        type="submit" 
+                        disabled={submitting}
+                        className={cn(
+                          "bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700",
+                          "text-white shadow-lg shadow-indigo-500/25 hover:shadow-indigo-500/40",
+                          "transition-all duration-300 transform hover:scale-[1.02]",
+                          "border-0 h-11"
+                        )}
+                      >
+                        {submitting ? (
+                          <>
+                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                            Adding...
+                          </>
+                        ) : (
+                          <>
+                            <Plus className="h-4 w-4 mr-2" />
+                            Add Patron
+                          </>
+                        )}
+                      </Button>
+                    </div>
+                  </form>
+                </CardContent>
+              </Card>
+            )}
+
             {/* Search Filters */}
             <Card className="backdrop-blur-xl border-border/30 bg-gradient-to-b from-background/95 to-background/90 shadow-lg shadow-indigo-500/10">
               <CardHeader>
@@ -520,26 +557,12 @@ export default function PatronPage() {
                             </td>
                             <td className="p-4">
                               {editingPatron?.id === p.id ? (
-                                <div className="space-y-1">
-                                  <Input
-                                    value={editingPatron.phone || ""}
-                                    onChange={e => setEditingPatron({ ...editingPatron, phone: handlePhoneInput(e.target.value) })}
-                                    placeholder="09XXXXXXXXX"
-                                    className={cn(
-                                      "bg-background/50 border-border/50 h-9",
-                                      editingPatron.phone && getDigitCount(editingPatron.phone) > 11 && "border-red-300"
-                                    )}
-                                    maxLength={15}
-                                  />
-                                  {editingPatron.phone && (
-                                    <div className={cn(
-                                      "text-xs",
-                                      getDigitCount(editingPatron.phone) > 11 ? "text-red-600 font-medium" : "text-muted-foreground"
-                                    )}>
-                                      {getDigitCount(editingPatron.phone)}/11 digits
-                                    </div>
-                                  )}
-                                </div>
+                                <Input
+                                  value={editingPatron.phone || ""}
+                                  onChange={e => setEditingPatron({ ...editingPatron, phone: handlePhoneInput(e.target.value) })}
+                                  placeholder="123-456-7890"
+                                  className="bg-background/50 border-border/50 h-9"
+                                />
                               ) : (
                                 <div className="flex items-center gap-2">
                                   <Phone className="h-4 w-4 text-indigo-600" />
@@ -590,7 +613,7 @@ export default function PatronPage() {
                                   <Button 
                                     size="sm" 
                                     onClick={handleSaveEdit}
-                                    disabled={submitting || (editingPatron.phone && getDigitCount(editingPatron.phone) > 11)}
+                                    disabled={submitting}
                                     className="bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white border-0"
                                   >
                                     {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
