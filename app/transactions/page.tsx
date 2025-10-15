@@ -11,7 +11,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { toast } from "sonner"
-import { Search, Calendar, User, Book, ArrowUpDown, AlertTriangle, Clock, Plus, Loader2, Filter, History, Activity, Mail } from "lucide-react"
+import { Search, Calendar, User, Book, ArrowUpDown, AlertTriangle, Clock, Plus, Loader2, Filter, History, Activity, Mail, RefreshCw } from "lucide-react"
 import emailjs from "@emailjs/browser"
 import { cn } from "@/lib/utils"
 import { AuthGuard } from "@/components/auth-guard"
@@ -62,107 +62,132 @@ export default function TransactionsPage() {
 
   // Fetch data with proper error handling
   useEffect(() => {
-    const fetchData = async () => {
-      try {
-        setLoading(true);
-        console.log("🔍 Starting data fetch...");
+    fetchData()
+  }, [])
 
-        // Fetch loans (with joins), borrowers, and books in parallel
-        const [
-          { data: loansData, error: loansError },
-          { data: borrowersData, error: borrowersError },
-          { data: booksData, error: booksError },
-        ] = await Promise.all([
-          supabase
-            .from("loans")
-            .select(`
+  const fetchData = async () => {
+    try {
+      setLoading(true);
+      console.log("🔍 Starting data fetch...");
+
+      // Fetch loans (with joins), borrowers, and books in parallel
+      const [
+        { data: loansData, error: loansError },
+        { data: borrowersData, error: borrowersError },
+        { data: booksData, error: booksError },
+      ] = await Promise.all([
+        supabase
+          .from("loans")
+          .select(`
+            id,
+            status,
+            due_date,
+            returned_date,
+            created_at,
+            loan_date,
+            patron_id,
+            book_id,
+            borrowers:borrowers!loans_patron_id_fkey (
               id,
-              status,
-              due_date,
-              returned_date,
-              created_at,
-              loan_date,
-              patron_id,
-              book_id,
-              borrowers:borrowers!loans_patron_id_fkey (
-                id,
-                name,
-                email
-              ),
-              books:books!loans_book_id_fkey (
-                id,
-                title,
-                author,
-                isbn,
-                category,
-                status
-              )
-            `)
-            .order("created_at", { ascending: false }),
+              name,
+              email
+            ),
+            books:books!loans_book_id_fkey (
+              id,
+              title,
+              author,
+              isbn,
+              category,
+              status
+            )
+          `)
+          .order("created_at", { ascending: false }),
 
-          supabase
-            .from("borrowers")
-            .select("id, name, email, phone, status")
-            .order("name"),
+        // FIX: Remove any limits and ensure all borrowers are fetched
+        supabase
+          .from("borrowers")
+          .select("id, name, email, phone, status")
+          .order("name"), // No limit() - this will fetch all borrowers
 
-          supabase
-            .from("books")
-            .select("id, title, author, isbn, category, status")
-            .order("title"),
-        ]);
+        supabase
+          .from("books")
+          .select("id, title, author, isbn, category, status")
+          .order("title"),
+      ]);
 
-        // Handle LOANS
-        if (loansError) {
-          console.error("❌ Loans join error:", loansError);
-          const { data: simpleLoans, error: simpleError } = await supabase
-            .from("loans")
-            .select("*")
-            .order("created_at", { ascending: false });
-
-          if (simpleError) {
-            console.error("❌ Simple loans error:", simpleError);
-            setTransactions([]);
-          } else {
-            setTransactions(simpleLoans || []);
-          }
-        } else {
-          const enhancedLoans = loansData?.map((loan) => ({
-            ...loan,
-            book_title:
-              loan.books?.title ||
-              booksData?.find((b) => b.id === loan.book_id)?.title ||
-              `Book #${loan.book_id?.substring(0, 8)}...`,
-          }));
-
-          setTransactions(enhancedLoans || []);
-        }
-
-        // Handle BORROWERS and BOOKS
-        if (borrowersError) {
-          console.error("❌ Borrowers error:", borrowersError);
-          setBorrowers([]);
-        } else {
-          setBorrowers(borrowersData || []);
-        }
-
-        if (booksError) {
-          console.error("❌ Books error:", booksError);
-          setBooks([]);
-        } else {
-          // Only show available books for new transactions
-          const availableBooks = (booksData || []).filter(book => book.status === "available");
-          setBooks(availableBooks);
-        }
-      } catch (error) {
-        console.error("❌ Unexpected error:", error);
-        toast.error("Failed to load data");
-      } finally {
-        setLoading(false);
+      // Handle BORROWERS - ensure all are loaded
+      if (borrowersError) {
+        console.error("❌ Borrowers error:", borrowersError);
+        setBorrowers([]);
+      } else {
+        console.log(`📊 Loaded ${borrowersData?.length || 0} borrowers`);
+        setBorrowers(borrowersData || []);
       }
-    };
 
-    fetchData();
-  }, []);
+      // Handle LOANS
+      if (loansError) {
+        console.error("❌ Loans join error:", loansError);
+        const { data: simpleLoans, error: simpleError } = await supabase
+          .from("loans")
+          .select("*")
+          .order("created_at", { ascending: false });
+
+        if (simpleError) {
+          console.error("❌ Simple loans error:", simpleError);
+          setTransactions([]);
+        } else {
+          setTransactions(simpleLoans || []);
+        }
+      } else {
+        const enhancedLoans = loansData?.map((loan) => ({
+          ...loan,
+          book_title:
+            loan.books?.title ||
+            booksData?.find((b) => b.id === loan.book_id)?.title ||
+            `Book #${loan.book_id?.substring(0, 8)}...`,
+        }));
+
+        setTransactions(enhancedLoans || []);
+      }
+
+      // Handle BOOKS
+      if (booksError) {
+        console.error("❌ Books error:", booksError);
+        setBooks([]);
+      } else {
+        // Only show available books for new transactions
+        const availableBooks = (booksData || []).filter(book => book.status === "available");
+        console.log(`📚 Loaded ${availableBooks.length} available books`);
+        setBooks(availableBooks);
+      }
+    } catch (error) {
+      console.error("❌ Unexpected error:", error);
+      toast.error("Failed to load data");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Function to reload borrowers
+  const reloadBorrowers = async () => {
+    try {
+      const { data: borrowersData, error } = await supabase
+        .from("borrowers")
+        .select("id, name, email, phone, status")
+        .order("name");
+      
+      if (error) {
+        console.error("❌ Error reloading borrowers:", error);
+        toast.error("Failed to reload borrowers");
+      } else {
+        setBorrowers(borrowersData || []);
+        console.log(`🔄 Reloaded ${borrowersData?.length || 0} borrowers`);
+        toast.success(`Loaded ${borrowersData?.length || 0} borrowers`);
+      }
+    } catch (error) {
+      console.error("❌ Unexpected error reloading borrowers:", error);
+    }
+  };
 
   // Function to check if a transaction is overdue
   const isOverdue = (transaction: Transaction): boolean => {
@@ -298,6 +323,16 @@ export default function TransactionsPage() {
       toast.error("Failed to check data relationships")
     }
   }
+
+  // Debug function to check borrower data
+  const debugBorrowers = () => {
+    console.log("🔍 BORROWERS DEBUG:", {
+      totalBorrowers: borrowers.length,
+      borrowers: borrowers.map(b => ({ id: b.id, name: b.name, email: b.email })),
+      newLoanPatronId: newLoan.patron_id
+    });
+    toast.info(`Found ${borrowers.length} borrowers in system`);
+  };
 
   // Mark transaction as active
   const markAsActive = async (loanId: string) => {
@@ -711,31 +746,68 @@ export default function TransactionsPage() {
               <TabsContent value="new" className="space-y-6">
                 <Card className="backdrop-blur-xl border-border/30 bg-gradient-to-b from-background/95 to-background/90 shadow-lg shadow-indigo-500/10">
                   <CardHeader>
-                    <CardTitle className="bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">
-                      Add New Transaction
-                    </CardTitle>
-                    <CardDescription>Create a new book loan transaction. Only available books are shown.</CardDescription>
+                    <div className="flex justify-between items-center">
+                      <div>
+                        <CardTitle className="bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">
+                          Add New Transaction
+                        </CardTitle>
+                        <CardDescription>
+                          Create a new book loan transaction. 
+                          {borrowers.length > 0 ? ` Showing ${borrowers.length} borrowers.` : ' No borrowers found.'}
+                        </CardDescription>
+                      </div>
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        onClick={reloadBorrowers}
+                        className="flex items-center gap-2"
+                      >
+                        <RefreshCw className="h-4 w-4" />
+                        Refresh
+                      </Button>
+                    </div>
                   </CardHeader>
                   <CardContent>
                     <form onSubmit={handleAddTransaction} className="space-y-4">
                       <div className="grid gap-4 md:grid-cols-3">
                         <div className="space-y-3">
-                          <Label htmlFor="borrower" className="text-sm font-medium text-foreground/80">Borrower</Label>
+                          <Label htmlFor="borrower" className="text-sm font-medium text-foreground/80">
+                            Borrower {borrowers.length > 0 && `(${borrowers.length} available)`}
+                          </Label>
                           <Select
                             value={newLoan.patron_id}
                             onValueChange={val => setNewLoan({ ...newLoan, patron_id: val })}
                           >
                             <SelectTrigger className="bg-background/50 border-border/50 h-11">
-                              <SelectValue placeholder="Select borrower" />
+                              <SelectValue placeholder={borrowers.length > 0 ? "Select borrower" : "No borrowers available"} />
                             </SelectTrigger>
                             <SelectContent>
-                              {borrowers.map(b => (
-                                <SelectItem key={b.id} value={b.id}>
-                                  {b.name} {b.email && `(${b.email})`}
+                              {borrowers.length > 0 ? (
+                                borrowers.map(b => (
+                                  <SelectItem key={b.id} value={b.id}>
+                                    <div className="flex flex-col">
+                                      <span className="font-medium">{b.name}</span>
+                                      {b.email && (
+                                        <span className="text-xs text-muted-foreground">{b.email}</span>
+                                      )}
+                                      {b.phone && (
+                                        <span className="text-xs text-muted-foreground">{b.phone}</span>
+                                      )}
+                                    </div>
+                                  </SelectItem>
+                                ))
+                              ) : (
+                                <SelectItem value="no-borrowers" disabled>
+                                  No borrowers available
                                 </SelectItem>
-                              ))}
+                              )}
                             </SelectContent>
                           </Select>
+                          {borrowers.length === 0 && (
+                            <p className="text-xs text-destructive">
+                              No borrowers found. Please add borrowers first.
+                            </p>
+                          )}
                         </div>
 
                         <div className="space-y-3">
@@ -750,7 +822,13 @@ export default function TransactionsPage() {
                             <SelectContent>
                               {books.map(b => (
                                 <SelectItem key={b.id} value={b.id}>
-                                  {b.title} by {b.author}
+                                  <div className="flex flex-col">
+                                    <span className="font-medium">{b.title}</span>
+                                    <span className="text-xs text-muted-foreground">by {b.author}</span>
+                                    {b.isbn && (
+                                      <span className="text-xs text-muted-foreground">ISBN: {b.isbn}</span>
+                                    )}
+                                  </div>
                                 </SelectItem>
                               ))}
                             </SelectContent>
@@ -775,15 +853,27 @@ export default function TransactionsPage() {
                         </div>
                       </div>
 
-                      <div className="flex justify-end">
+                      {/* Debug button - remove in production */}
+                      <div className="flex justify-between items-center">
+                        <Button 
+                          type="button" 
+                          variant="outline" 
+                          size="sm" 
+                          onClick={debugBorrowers}
+                          className="text-xs"
+                        >
+                          Debug Borrowers
+                        </Button>
+
                         <Button 
                           type="submit" 
-                          disabled={submitting}
+                          disabled={submitting || borrowers.length === 0}
                           className={cn(
                             "bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700",
                             "text-white shadow-lg shadow-indigo-500/25 hover:shadow-indigo-500/40",
                             "transition-all duration-300 transform hover:scale-[1.02]",
-                            "border-0 h-11"
+                            "border-0 h-11",
+                            borrowers.length === 0 && "opacity-50 cursor-not-allowed"
                           )}
                         >
                           {submitting ? (
