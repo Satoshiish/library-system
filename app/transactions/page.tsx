@@ -70,7 +70,7 @@ export default function TransactionsPage() {
         setLoading(true);
         console.log("🔍 Starting data fetch...");
 
-        // Fetch loans (with joins), patrons, and books in parallel
+        // Fetch loans (with joins), ONLY ACTIVE PATRONS, and books in parallel
         const [
           { data: loansData, error: loansError },
           { data: patronsData, error: patronsError },
@@ -108,6 +108,7 @@ export default function TransactionsPage() {
           supabase
             .from("patrons")
             .select("id, full_name, email, phone, status, member_since")
+            .eq("status", "active") // ONLY FETCH ACTIVE PATRONS
             .order("full_name"),
 
           supabase
@@ -169,7 +170,7 @@ export default function TransactionsPage() {
           console.error("❌ Patrons error:", patronsError);
           setBorrowers([]);
         } else {
-          console.log(`📊 Loaded ${patronsData?.length || 0} patrons from database`);
+          console.log(`📊 Loaded ${patronsData?.length || 0} ACTIVE patrons from database`);
           setBorrowers(patronsData || []);
         }
 
@@ -229,6 +230,7 @@ export default function TransactionsPage() {
 
       const [
         { data: loansData, error: loansError },
+        { data: patronsData, error: patronsError },
         { data: booksData, error: booksError },
       ] = await Promise.all([
         supabase
@@ -261,6 +263,12 @@ export default function TransactionsPage() {
           .order("created_at", { ascending: false }),
 
         supabase
+          .from("patrons")
+          .select("id, full_name, email, phone, status, member_since")
+          .eq("status", "active") // ONLY REFRESH ACTIVE PATRONS
+          .order("full_name"),
+
+        supabase
           .from("books")
           .select("id, title, author, isbn, category, status")
           .order("title"),
@@ -268,6 +276,9 @@ export default function TransactionsPage() {
 
       if (!loansError) {
         setTransactions(loansData || []);
+      }
+      if (!patronsError) {
+        setBorrowers(patronsData || []);
       }
       if (!booksError) {
         setBooks(booksData || []);
@@ -580,6 +591,13 @@ export default function TransactionsPage() {
         return;
       }
 
+      // Additional validation: ensure patron is active
+      const selectedPatron = borrowers.find(patron => patron.id === newLoan.patron_id);
+      if (!selectedPatron || selectedPatron.status !== "active") {
+        toast.error("Selected patron is not active. Please select an active patron.");
+        return;
+      }
+
       // Create the loan transaction
       const { error: loanError, data: loanData } = await supabase
         .from("loans")
@@ -880,7 +898,8 @@ export default function TransactionsPage() {
                     </CardTitle>
                     <CardDescription>
                       Create a new book loan transaction. 
-                      {borrowers.length > 0 ? ` Showing all ${borrowers.length} patrons.` : ' No patrons found.'}
+                      {borrowers.length > 0 ? ` Showing ${borrowers.length} active patrons only.` : ' No active patrons found.'}
+                      Inactive and archived patrons cannot borrow books.
                     </CardDescription>
                   </CardHeader>
                   <CardContent>
@@ -888,14 +907,14 @@ export default function TransactionsPage() {
                       <div className="grid gap-4 md:grid-cols-3">
                         <div className="space-y-3">
                           <Label htmlFor="borrower" className="text-sm font-medium text-foreground/80">
-                            Patron {borrowers.length > 0 && `(${borrowers.length} total)`}
+                            Patron {borrowers.length > 0 && `(${borrowers.length} active)`}
                           </Label>
                           <Select
                             value={newLoan.patron_id}
                             onValueChange={val => setNewLoan({ ...newLoan, patron_id: val })}
                           >
                             <SelectTrigger className="bg-background/50 border-border/50 h-11">
-                              <SelectValue placeholder={borrowers.length > 0 ? "Select patron" : "No patrons available"} />
+                              <SelectValue placeholder={borrowers.length > 0 ? "Select active patron" : "No active patrons available"} />
                             </SelectTrigger>
                             <SelectContent className="max-h-60 overflow-y-auto">
                               {borrowers.length > 0 ? (
@@ -905,10 +924,10 @@ export default function TransactionsPage() {
                                       <div className="flex items-center justify-between">
                                         <span className="font-medium text-sm">{b.full_name}</span>
                                         <Badge 
-                                          variant={b.status === "active" ? "default" : "secondary"} 
-                                          className="text-xs"
+                                          variant="default" 
+                                          className="text-xs bg-green-100 text-green-800 border-green-200"
                                         >
-                                          {b.status || "unknown"}
+                                          Active
                                         </Badge>
                                       </div>
                                       {b.email && (
@@ -928,20 +947,16 @@ export default function TransactionsPage() {
                                 ))
                               ) : (
                                 <SelectItem value="no-patrons" disabled>
-                                  No patrons available
+                                  No active patrons available
                                 </SelectItem>
                               )}
                             </SelectContent>
                           </Select>
                           {borrowers.length > 0 && (
                             <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
-                              <span>Active: {borrowers.filter(b => b.status === 'active').length}</span>
+                              <span className="text-green-600 font-medium">Active: {borrowers.length}</span>
                               <span>•</span>
-                              <span>Inactive: {borrowers.filter(b => b.status === 'inactive').length}</span>
-                              <span>•</span>
-                              <span>Archived: {borrowers.filter(b => b.status === 'archived').length}</span>
-                              <span>•</span>
-                              <span>Total: {borrowers.length}</span>
+                              <span>Only active patrons can borrow books</span>
                             </div>
                           )}
                         </div>
@@ -1011,7 +1026,7 @@ export default function TransactionsPage() {
                           ) : (
                             <>
                               <Plus className="h-4 w-4 mr-2" />
-                              Add Transaction
+                              {borrowers.length === 0 ? "No Active Patrons" : "Add Transaction"}
                             </>
                           )}
                         </Button>
