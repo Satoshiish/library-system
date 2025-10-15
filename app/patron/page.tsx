@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { toast } from "sonner"
 import { supabase } from "@/lib/supabaseClient"
 import { Plus, Edit, Archive, User, Mail, Phone, Calendar, Search, Users, Save, X, Loader2, Trash2, RotateCcw } from "lucide-react"
@@ -53,6 +54,20 @@ export default function PatronPage() {
     setLoading(false)
   }
 
+  // Validate phone number (only numbers)
+  const validatePhoneNumber = (phone: string) => {
+    if (!phone) return true // Empty is allowed
+    const phoneRegex = /^[0-9+\-\s()]*$/ // Only numbers and common phone symbols
+    return phoneRegex.test(phone)
+  }
+
+  // Format phone number input
+  const handlePhoneInput = (value: string) => {
+    // Remove any non-numeric characters except +, -, (, )
+    const cleaned = value.replace(/[^\d+\-()\s]/g, '')
+    return cleaned
+  }
+
   // Add new patron
   const handleAddPatron = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -65,6 +80,12 @@ export default function PatronPage() {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
     if (!emailRegex.test(newPatron.email)) {
       toast.error("Please enter a valid email address")
+      return
+    }
+
+    // Validate phone number
+    if (newPatron.phone && !validatePhoneNumber(newPatron.phone)) {
+      toast.error("Invalid phone number. Please use numbers only with optional +, -, (, )")
       return
     }
 
@@ -89,7 +110,7 @@ export default function PatronPage() {
     } else {
       setPatrons(prev => [data, ...prev])
       setNewPatron({ full_name: "", email: "", phone: "" })
-      toast.success("Patron added successfully")
+      toast.success("Patron added successfully! ✅")
     }
     setSubmitting(false)
   }
@@ -116,7 +137,7 @@ export default function PatronPage() {
       setPatrons(prev => prev.map(p => 
         p.id === patronToArchive.id ? { ...p, status: "archived" } : p
       ))
-      toast.success("Patron archived successfully")
+      toast.success("Patron archived successfully! 📁")
     }
     setSubmitting(false)
     setArchiveConfirmOpen(false)
@@ -145,7 +166,7 @@ export default function PatronPage() {
       setPatrons(prev => prev.map(p => 
         p.id === patronToRestore.id ? { ...p, status: "active" } : p
       ))
-      toast.success("Patron restored successfully")
+      toast.success("Patron restored successfully! 🔄")
     }
     setSubmitting(false)
     setRestoreConfirmOpen(false)
@@ -172,7 +193,7 @@ export default function PatronPage() {
       toast.error("Failed to delete patron")
     } else {
       setPatrons(prev => prev.filter(p => p.id !== patronToDelete.id))
-      toast.success("Patron deleted successfully")
+      toast.success("Patron deleted successfully! 🗑️")
     }
     setSubmitting(false)
     setDeleteConfirmOpen(false)
@@ -195,6 +216,12 @@ export default function PatronPage() {
       return
     }
 
+    // Validate phone number
+    if (editingPatron.phone && !validatePhoneNumber(editingPatron.phone)) {
+      toast.error("Invalid phone number. Please use numbers only with optional +, -, (, )")
+      return
+    }
+
     setSubmitting(true)
     const { error, data } = await supabase
       .from("patrons")
@@ -202,6 +229,7 @@ export default function PatronPage() {
         full_name: editingPatron.full_name.trim(),
         email: editingPatron.email.trim(),
         phone: editingPatron.phone?.trim() || null,
+        status: editingPatron.status,
       })
       .eq("id", editingPatron.id)
       .select()
@@ -217,7 +245,7 @@ export default function PatronPage() {
     } else {
       setPatrons(prev => prev.map(p => (p.id === data.id ? data : p)))
       setEditingPatron(null)
-      toast.success("Patron updated successfully")
+      toast.success("Patron updated successfully! ✨")
     }
     setSubmitting(false)
   }
@@ -350,8 +378,8 @@ export default function PatronPage() {
                         <Input
                           id="phone"
                           value={newPatron.phone}
-                          onChange={e => setNewPatron({ ...newPatron, phone: e.target.value })}
-                          placeholder="Optional"
+                          onChange={e => setNewPatron({ ...newPatron, phone: handlePhoneInput(e.target.value) })}
+                          placeholder="123-456-7890"
                           className="bg-background/50 border-border/50 focus:border-indigo-300 transition-colors h-11"
                         />
                       </div>
@@ -494,7 +522,8 @@ export default function PatronPage() {
                               {editingPatron?.id === p.id ? (
                                 <Input
                                   value={editingPatron.phone || ""}
-                                  onChange={e => setEditingPatron({ ...editingPatron, phone: e.target.value })}
+                                  onChange={e => setEditingPatron({ ...editingPatron, phone: handlePhoneInput(e.target.value) })}
+                                  placeholder="123-456-7890"
                                   className="bg-background/50 border-border/50 h-9"
                                 />
                               ) : (
@@ -511,18 +540,35 @@ export default function PatronPage() {
                               </div>
                             </td>
                             <td className="p-4">
-                              <Badge
-                                className={cn(
-                                  "backdrop-blur-sm border",
-                                  p.status === "active" 
-                                    ? "bg-green-100 text-green-800 border-green-200" 
-                                    : p.status === "inactive" 
-                                    ? "bg-yellow-100 text-yellow-800 border-yellow-200"
-                                    : "bg-red-100 text-red-800 border-red-200"
-                                )}
-                              >
-                                {p.status}
-                              </Badge>
+                              {editingPatron?.id === p.id ? (
+                                <Select
+                                  value={editingPatron.status}
+                                  onValueChange={(value: "active" | "inactive") => 
+                                    setEditingPatron({ ...editingPatron, status: value })
+                                  }
+                                >
+                                  <SelectTrigger className="bg-background/50 border-border/50 h-9 w-32">
+                                    <SelectValue />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="active">Active</SelectItem>
+                                    <SelectItem value="inactive">Inactive</SelectItem>
+                                  </SelectContent>
+                                </Select>
+                              ) : (
+                                <Badge
+                                  className={cn(
+                                    "backdrop-blur-sm border",
+                                    p.status === "active" 
+                                      ? "bg-green-100 text-green-800 border-green-200" 
+                                      : p.status === "inactive" 
+                                      ? "bg-yellow-100 text-yellow-800 border-yellow-200"
+                                      : "bg-red-100 text-red-800 border-red-200"
+                                  )}
+                                >
+                                  {p.status}
+                                </Badge>
+                              )}
                             </td>
                             <td className="p-4 flex gap-2 justify-end">
                               {editingPatron?.id === p.id ? (
