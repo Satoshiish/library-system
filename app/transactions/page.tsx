@@ -906,13 +906,14 @@ export default function TransactionsPage() {
                   </CardHeader>
 
                   <CardContent>
-                    <form onSubmit={handleAddTransaction} className="space-y-4">
+                    <form onSubmit={handleAddTransaction} className="space-y-6">
                       <div className="grid gap-6 md:grid-cols-3">
                         {/* Patron Select */}
                         <div className="space-y-3">
                           <Label htmlFor="borrower" className="text-sm font-medium text-foreground/80">
                             Patron {borrowers.length > 0 && `(${borrowers.length} active)`}
                           </Label>
+
                           <Select
                             value={newLoan.patron_id}
                             onValueChange={(val) => setNewLoan({ ...newLoan, patron_id: val })}
@@ -926,6 +927,7 @@ export default function TransactionsPage() {
                                 }
                               />
                             </SelectTrigger>
+
                             <SelectContent className="max-h-60 overflow-y-auto">
                               {borrowers.length > 0 ? (
                                 borrowers.map((b) => (
@@ -961,9 +963,40 @@ export default function TransactionsPage() {
                             </SelectContent>
                           </Select>
 
-                          {/* Patron Info Footer */}
+                          {/* ✅ Show selected patron info below dropdown */}
+                          {newLoan.patron_id && (
+                            (() => {
+                              const selected = borrowers.find((b) => b.id === newLoan.patron_id);
+                              if (!selected) return null;
+                              return (
+                                <div className="mt-2 rounded-lg border border-border/40 p-3 bg-background/30 backdrop-blur-sm">
+                                  <div className="flex items-center justify-between mb-1">
+                                    <span className="font-medium text-sm">{selected.full_name}</span>
+                                    <Badge
+                                      variant="default"
+                                      className="text-xs bg-green-100 text-green-800 border-green-200"
+                                    >
+                                      Active
+                                    </Badge>
+                                  </div>
+                                  {selected.email && (
+                                    <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                                      <Mail className="h-3 w-3" /> {selected.email}
+                                    </div>
+                                  )}
+                                  {selected.phone && (
+                                    <div className="flex items-center gap-1 text-xs text-muted-foreground mt-1">
+                                      <Phone className="h-3 w-3" /> {selected.phone}
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            })()
+                          )}
+
+                          {/* Footer Info */}
                           {borrowers.length > 0 && (
-                            <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
+                            <div className="flex flex-wrap gap-2 text-xs text-muted-foreground mt-1">
                               <span className="text-green-600 font-medium">
                                 Active: {borrowers.length}
                               </span>
@@ -1006,8 +1039,8 @@ export default function TransactionsPage() {
                             </SelectContent>
                           </Select>
                           <p className="text-xs text-muted-foreground">
-                            Showing{" "}
-                            {books.filter((b) => b.status === "available").length} available book
+                            Showing {books.filter((b) => b.status === "available").length} available
+                            book
                             {books.filter((b) => b.status === "available").length !== 1 ? "s" : ""}
                           </p>
                         </div>
@@ -1022,7 +1055,9 @@ export default function TransactionsPage() {
                             <Input
                               type="date"
                               value={newLoan.due_date}
-                              onChange={(e) => setNewLoan({ ...newLoan, due_date: e.target.value })}
+                              onChange={(e) =>
+                                setNewLoan({ ...newLoan, due_date: e.target.value })
+                              }
                               min={new Date().toISOString().split("T")[0]}
                               className="pl-11 bg-background/50 border-border/50 focus:border-indigo-300 transition-colors h-11"
                             />
