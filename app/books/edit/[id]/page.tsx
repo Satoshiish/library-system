@@ -280,7 +280,7 @@ export default function EditBookPage() {
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="available">Available</SelectItem>
-                        <SelectItem value="checked_out">Checked Out</SelectItem>
+                        <SelectItem value="checked_out">Borrowed</SelectItem>
                         <SelectItem value="reserved">Reserved</SelectItem>
                       </SelectContent>
                     </Select>
