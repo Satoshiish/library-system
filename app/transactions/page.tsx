@@ -892,121 +892,223 @@ export default function TransactionsPage() {
               {/* New Transaction Tab */}
               <TabsContent value="new" className="space-y-6">
                 <Card className="backdrop-blur-xl border-border/30 bg-gradient-to-b from-background/95 to-background/90 shadow-lg shadow-indigo-500/10">
-                  <CardHeader>
-                    <CardTitle className="bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">
-                      Add New Transaction
+                  <CardHeader className="pb-4">
+                    <CardTitle className="flex items-center gap-2 text-2xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">
+                      <Plus className="h-6 w-6" />
+                      New Book Loan
                     </CardTitle>
-                    <CardDescription>
-                      Create a new book loan transaction. 
-                      {borrowers.length > 0 ? ` Showing ${borrowers.length} active patrons only.` : ' No active patrons found.'}
-                      Inactive and archived patrons cannot borrow books.
+                    <CardDescription className="text-base">
+                      Create a new book loan transaction. Only active patrons can borrow books.
                     </CardDescription>
                   </CardHeader>
                   <CardContent>
-                    <form onSubmit={handleAddTransaction} className="space-y-4">
-                      <div className="grid gap-4 md:grid-cols-3">
-                        <div className="space-y-3">
-                          <Label htmlFor="borrower" className="text-sm font-medium text-foreground/80">
-                            Patron {borrowers.length > 0 && `(${borrowers.length} active)`}
-                          </Label>
+                    <form onSubmit={handleAddTransaction} className="space-y-6">
+                      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+                        {/* Patron Selection */}
+                        <div className="space-y-4 md:col-span-2 lg:col-span-1">
+                          <div className="flex items-center justify-between">
+                            <Label className="text-sm font-semibold text-foreground flex items-center gap-2">
+                              <User className="h-4 w-4 text-indigo-600" />
+                              Select Patron
+                            </Label>
+                            <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
+                              {borrowers.length} Active
+                            </Badge>
+                          </div>
+                          
                           <Select
                             value={newLoan.patron_id}
                             onValueChange={val => setNewLoan({ ...newLoan, patron_id: val })}
                           >
-                            <SelectTrigger className="bg-background/50 border-border/50 h-11">
-                              <SelectValue placeholder={borrowers.length > 0 ? "Select active patron" : "No active patrons available"} />
+                            <SelectTrigger className="bg-background/50 border-border/50 h-12 text-base">
+                              <SelectValue placeholder="Choose a patron..." />
                             </SelectTrigger>
-                            <SelectContent className="max-h-60 overflow-y-auto">
+                            <SelectContent className="max-h-80">
                               {borrowers.length > 0 ? (
                                 borrowers.map(b => (
-                                  <SelectItem key={b.id} value={b.id} className="py-2">
-                                    <div className="flex flex-col gap-1">
+                                  <SelectItem key={b.id} value={b.id} className="py-3">
+                                    <div className="flex flex-col gap-2">
                                       <div className="flex items-center justify-between">
-                                        <span className="font-medium text-sm">{b.full_name}</span>
+                                        <span className="font-semibold text-foreground">{b.full_name}</span>
                                         <Badge 
-                                          variant="default" 
-                                          className="text-xs bg-green-100 text-green-800 border-green-200"
+                                          className="bg-green-100 text-green-800 border-green-200 text-xs"
                                         >
                                           Active
                                         </Badge>
                                       </div>
-                                      {b.email && (
-                                        <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                                          <Mail className="h-3 w-3" />
-                                          {b.email}
-                                        </div>
-                                      )}
-                                      {b.phone && (
-                                        <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                                          <Phone className="h-3 w-3" />
-                                          {b.phone}
-                                        </div>
-                                      )}
+                                      <div className="space-y-1">
+                                        {b.email && (
+                                          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                                            <Mail className="h-3 w-3" />
+                                            <span className="truncate">{b.email}</span>
+                                          </div>
+                                        )}
+                                        {b.phone && (
+                                          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                                            <Phone className="h-3 w-3" />
+                                            <span>{b.phone}</span>
+                                          </div>
+                                        )}
+                                      </div>
                                     </div>
                                   </SelectItem>
                                 ))
                               ) : (
-                                <SelectItem value="no-patrons" disabled>
-                                  No active patrons available
-                                </SelectItem>
+                                <div className="py-4 text-center text-muted-foreground">
+                                  <User className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                                  <p>No active patrons available</p>
+                                </div>
                               )}
                             </SelectContent>
                           </Select>
-                          {borrowers.length > 0 && (
-                            <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
-                              <span className="text-green-600 font-medium">Active: {borrowers.length}</span>
-                              <span>•</span>
-                              <span>Only active patrons can borrow books</span>
+                          
+                          {newLoan.patron_id && (
+                            <div className="p-3 bg-blue-50/50 rounded-lg border border-blue-200/50">
+                              <div className="flex items-center gap-2 text-sm text-blue-700">
+                                <User className="h-4 w-4" />
+                                <span className="font-medium">Patron Selected</span>
+                              </div>
                             </div>
                           )}
                         </div>
 
-                        <div className="space-y-3">
-                          <Label htmlFor="book" className="text-sm font-medium text-foreground/80">Book</Label>
+                        {/* Book Selection */}
+                        <div className="space-y-4 md:col-span-2 lg:col-span-1">
+                          <div className="flex items-center justify-between">
+                            <Label className="text-sm font-semibold text-foreground flex items-center gap-2">
+                              <Book className="h-4 w-4 text-indigo-600" />
+                              Select Book
+                            </Label>
+                            <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
+                              {books.filter(b => b.status === "available").length} Available
+                            </Badge>
+                          </div>
+                          
                           <Select
                             value={newLoan.book_id}
                             onValueChange={val => setNewLoan({ ...newLoan, book_id: val })}
                           >
-                            <SelectTrigger className="bg-background/50 border-border/50 h-11">
-                              <SelectValue placeholder="Select book" />
+                            <SelectTrigger className="bg-background/50 border-border/50 h-12 text-base">
+                              <SelectValue placeholder="Choose a book..." />
                             </SelectTrigger>
-                            <SelectContent>
+                            <SelectContent className="max-h-80">
                               {books
                                 .filter(book => book.status === "available")
                                 .map(b => (
-                                <SelectItem key={b.id} value={b.id}>
-                                  <div className="flex flex-col">
-                                    <span className="font-medium">{b.title}</span>
-                                    <span className="text-xs text-muted-foreground">by {b.author}</span>
-                                    {b.isbn && (
-                                      <span className="text-xs text-muted-foreground">ISBN: {b.isbn}</span>
-                                    )}
+                                <SelectItem key={b.id} value={b.id} className="py-3">
+                                  <div className="flex flex-col gap-2">
+                                    <div className="font-semibold text-foreground line-clamp-1">{b.title}</div>
+                                    <div className="space-y-1">
+                                      <div className="text-sm text-muted-foreground">by {b.author}</div>
+                                      {b.isbn && (
+                                        <div className="text-xs text-muted-foreground flex items-center gap-1">
+                                          <span className="font-mono">ISBN: {b.isbn}</span>
+                                        </div>
+                                      )}
+                                      {b.category && (
+                                        <Badge variant="secondary" className="text-xs">
+                                          {b.category}
+                                        </Badge>
+                                      )}
+                                    </div>
                                   </div>
                                 </SelectItem>
                               ))}
                             </SelectContent>
                           </Select>
-                          <p className="text-xs text-muted-foreground">
-                            Showing {books.filter(b => b.status === "available").length} available book{books.filter(b => b.status === "available").length !== 1 ? 's' : ''}
-                          </p>
+                          
+                          {newLoan.book_id && (
+                            <div className="p-3 bg-green-50/50 rounded-lg border border-green-200/50">
+                              <div className="flex items-center gap-2 text-sm text-green-700">
+                                <Book className="h-4 w-4" />
+                                <span className="font-medium">Book Selected</span>
+                              </div>
+                            </div>
+                          )}
                         </div>
 
-                        <div className="space-y-3">
-                          <Label htmlFor="due_date" className="text-sm font-medium text-foreground/80">Due Date</Label>
+                        {/* Due Date Selection */}
+                        <div className="space-y-4 md:col-span-2 lg:col-span-1">
+                          <Label className="text-sm font-semibold text-foreground flex items-center gap-2">
+                            <Calendar className="h-4 w-4 text-indigo-600" />
+                            Due Date
+                          </Label>
+                          
                           <div className="relative">
-                            <Calendar className="absolute left-3 top-3 h-4 w-4 text-indigo-600" />
+                            <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-indigo-600" />
                             <Input
                               type="date"
                               value={newLoan.due_date}
                               onChange={e => setNewLoan({ ...newLoan, due_date: e.target.value })}
                               min={new Date().toISOString().split('T')[0]}
-                              className="pl-11 bg-background/50 border-border/50 focus:border-indigo-300 transition-colors h-11"
+                              className="pl-11 bg-background/50 border-border/50 focus:border-indigo-300 transition-colors h-12 text-base"
                             />
                           </div>
+                          
+                          {newLoan.due_date && (
+                            <div className="p-3 bg-orange-50/50 rounded-lg border border-orange-200/50">
+                              <div className="flex items-center gap-2 text-sm text-orange-700">
+                                <Calendar className="h-4 w-4" />
+                                <span className="font-medium">
+                                  Due: {new Date(newLoan.due_date).toLocaleDateString('en-US', { 
+                                    weekday: 'long', 
+                                    year: 'numeric', 
+                                    month: 'long', 
+                                    day: 'numeric' 
+                                  })}
+                                </span>
+                              </div>
+                            </div>
+                          )}
                         </div>
                       </div>
 
-                      <div className="flex justify-end">
+                      {/* Summary Card */}
+                      {(newLoan.patron_id || newLoan.book_id || newLoan.due_date) && (
+                        <Card className="bg-gradient-to-r from-indigo-50/50 to-purple-50/50 border-indigo-200/50">
+                          <CardContent className="p-4">
+                            <h4 className="font-semibold text-foreground mb-3 flex items-center gap-2">
+                              <Activity className="h-4 w-4 text-indigo-600" />
+                              Loan Summary
+                            </h4>
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+                              <div className="space-y-1">
+                                <div className="text-muted-foreground">Patron</div>
+                                <div className="font-medium">
+                                  {newLoan.patron_id ? (
+                                    borrowers.find(b => b.id === newLoan.patron_id)?.full_name || "Selected"
+                                  ) : (
+                                    <span className="text-muted-foreground">Not selected</span>
+                                  )}
+                                </div>
+                              </div>
+                              <div className="space-y-1">
+                                <div className="text-muted-foreground">Book</div>
+                                <div className="font-medium">
+                                  {newLoan.book_id ? (
+                                    books.find(b => b.id === newLoan.book_id)?.title || "Selected"
+                                  ) : (
+                                    <span className="text-muted-foreground">Not selected</span>
+                                  )}
+                                </div>
+                              </div>
+                              <div className="space-y-1">
+                                <div className="text-muted-foreground">Due Date</div>
+                                <div className="font-medium">
+                                  {newLoan.due_date ? (
+                                    new Date(newLoan.due_date).toLocaleDateString()
+                                  ) : (
+                                    <span className="text-muted-foreground">Not set</span>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      )}
+
+                      {/* Action Button */}
+                      <div className="flex justify-end pt-4 border-t border-border/30">
                         <Button 
                           type="submit" 
                           disabled={submitting || borrowers.length === 0}
@@ -1014,19 +1116,20 @@ export default function TransactionsPage() {
                             "bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700",
                             "text-white shadow-lg shadow-indigo-500/25 hover:shadow-indigo-500/40",
                             "transition-all duration-300 transform hover:scale-[1.02]",
-                            "border-0 h-11",
+                            "border-0 h-12 px-8 text-base font-semibold",
+                            "flex items-center gap-2",
                             borrowers.length === 0 && "opacity-50 cursor-not-allowed"
                           )}
                         >
                           {submitting ? (
                             <>
-                              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                              Adding...
+                              <Loader2 className="h-5 w-5 animate-spin" />
+                              Creating Loan...
                             </>
                           ) : (
                             <>
-                              <Plus className="h-4 w-4 mr-2" />
-                              {borrowers.length === 0 ? "No Active Patrons" : "Add Transaction"}
+                              <Plus className="h-5 w-5" />
+                              {borrowers.length === 0 ? "No Active Patrons Available" : "Create Book Loan"}
                             </>
                           )}
                         </Button>
@@ -1034,6 +1137,55 @@ export default function TransactionsPage() {
                     </form>
                   </CardContent>
                 </Card>
+
+                {/* Quick Stats */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <Card className="backdrop-blur-xl border-green-200/50 bg-gradient-to-b from-green-50/20 to-green-50/5">
+                    <CardContent className="p-4">
+                      <div className="flex items-center gap-3">
+                        <div className="p-2 rounded-lg bg-green-100">
+                          <User className="h-5 w-5 text-green-600" />
+                        </div>
+                        <div>
+                          <div className="text-2xl font-bold text-green-600">{borrowers.length}</div>
+                          <div className="text-sm text-muted-foreground">Active Patrons</div>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  <Card className="backdrop-blur-xl border-blue-200/50 bg-gradient-to-b from-blue-50/20 to-blue-50/5">
+                    <CardContent className="p-4">
+                      <div className="flex items-center gap-3">
+                        <div className="p-2 rounded-lg bg-blue-100">
+                          <Book className="h-5 w-5 text-blue-600" />
+                        </div>
+                        <div>
+                          <div className="text-2xl font-bold text-blue-600">
+                            {books.filter(b => b.status === "available").length}
+                          </div>
+                          <div className="text-sm text-muted-foreground">Available Books</div>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  <Card className="backdrop-blur-xl border-purple-200/50 bg-gradient-to-b from-purple-50/20 to-purple-50/5">
+                    <CardContent className="p-4">
+                      <div className="flex items-center gap-3">
+                        <div className="p-2 rounded-lg bg-purple-100">
+                          <Activity className="h-5 w-5 text-purple-600" />
+                        </div>
+                        <div>
+                          <div className="text-2xl font-bold text-purple-600">
+                            {activeTransactions}
+                          </div>
+                          <div className="text-sm text-muted-foreground">Active Loans</div>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </div>
               </TabsContent>
 
               {/* Active Transactions Tab */}
