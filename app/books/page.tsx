@@ -21,9 +21,8 @@ const supabase = createClient(
 
 const statusColors = {
   available: "bg-green-100 text-green-800 border-green-200",
-  checked_out: "bg-red-100 text-red-800 border-red-200",
+  borrowed: "bg-red-100 text-red-800 border-red-200",
   reserved: "bg-yellow-100 text-yellow-800 border-yellow-200",
-  borrowed: "bg-orange-100 text-orange-800 border-orange-200",
   active: "bg-blue-100 text-blue-800 border-blue-200",
 }
 
@@ -43,9 +42,8 @@ export default function BooksPage() {
   const getStatusDescription = (status: string) => {
     const descriptions = {
       available: "Book is available for borrowing",
-      checked_out: "Book is currently checked out",
-      reserved: "Book is reserved for someone",
       borrowed: "Book is currently on loan",
+      reserved: "Book is reserved for someone",
       active: "Book is actively on loan",
     }
     return descriptions[status] || "Unknown status"
@@ -66,7 +64,7 @@ export default function BooksPage() {
 
       if (booksError) throw booksError
 
-      // Then, get active loans to check which books are currently checked out
+      // Then, get active loans to check which books are currently borrowed
       const { data: activeLoans, error: loansError } = await supabase
         .from("loans")
         .select("book_id, status")
@@ -76,8 +74,8 @@ export default function BooksPage() {
         console.error("Error fetching loans:", loansError)
       }
 
-      // Create a set of book IDs that are currently checked out
-      const checkedOutBookIds = new Set(
+      // Create a set of book IDs that are currently borrowed
+      const borrowedBookIds = new Set(
         (activeLoans || []).map(loan => loan.book_id)
       )
 
@@ -87,11 +85,11 @@ export default function BooksPage() {
           // Determine actual status based on loans
           let actualStatus = book.status
           
-          // If book is in active loans, it should be checked_out
-          if (checkedOutBookIds.has(book.id)) {
-            actualStatus = "checked_out"
-          } else if (actualStatus === "checked_out") {
-            // If book shows as checked_out but no active loan, correct to available
+          // If book is in active loans, it should be borrowed
+          if (borrowedBookIds.has(book.id)) {
+            actualStatus = "borrowed"
+          } else if (actualStatus === "borrowed") {
+            // If book shows as borrowed but no active loan, correct to available
             actualStatus = "available"
           }
 
@@ -368,14 +366,14 @@ export default function BooksPage() {
 
               <Card className="backdrop-blur-xl border-border/30 bg-gradient-to-b from-background/95 to-background/90 shadow-lg shadow-indigo-500/10">
                 <CardHeader className="flex flex-row items-center justify-between pb-2">
-                  <CardTitle className="text-sm font-medium text-foreground/80">Checked Out</CardTitle>
+                  <CardTitle className="text-sm font-medium text-foreground/80">Borrowed</CardTitle>
                   <div className="p-2 rounded-lg bg-gradient-to-tr from-red-500/20 to-orange-500/20">
                     <Book className="h-4 w-4 text-red-600" />
                   </div>
                 </CardHeader>
                 <CardContent>
                   <div className="text-2xl font-bold text-foreground">
-                    {books.filter(b => b.status === 'checked_out' || b.status === 'borrowed').length}
+                    {books.filter(b => b.status === 'borrowed').length}
                   </div>
                   <p className="text-xs text-muted-foreground">Currently on loan</p>
                 </CardContent>
@@ -431,7 +429,6 @@ export default function BooksPage() {
                         <SelectContent>
                           <SelectItem value="all">All Status</SelectItem>
                           <SelectItem value="available">Available</SelectItem>
-                          <SelectItem value="checked_out">Checked Out</SelectItem>
                           <SelectItem value="borrowed">Borrowed</SelectItem>
                           <SelectItem value="reserved">Reserved</SelectItem>
                         </SelectContent>
