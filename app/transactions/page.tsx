@@ -217,21 +217,21 @@ export default function TransactionsPage() {
 
   // Function to manually link data when joins fail
   const getEnhancedTransactions = () => {
-    return transactions.map(transaction => {
-      if (transaction.borrowers && transaction.books) {
-        return transaction
-      }
+  return transactions.map(transaction => {
+    if (transaction.patrons && transaction.books) {
+      return transaction
+    }
 
-      const borrower = borrowers.find(b => b.id === transaction.patron_id)
-      const book = books.find(b => b.id === transaction.book_id)
-      
-      return {
-        ...transaction,
-        borrowers: borrower || undefined,
-        books: book || undefined
-      }
-    })
-  }
+    const patron = borrowers.find(b => b.id === transaction.patron_id) // Changed from borrower to patron
+    const book = books.find(b => b.id === transaction.book_id)
+    
+    return {
+      ...transaction,
+      patrons: patron || undefined, // Changed from borrowers to patrons
+      books: book || undefined
+    }
+  })
+}
 
   // Enhanced function to get borrower name with multiple fallbacks
   const getBorrowerName = (transaction: Transaction) => {
@@ -381,14 +381,14 @@ export default function TransactionsPage() {
 
   const sendOverdueReminder = async (transaction: Transaction) => {
     try {
-      const borrowerEmail = transaction.borrowers?.email
+      const borrowerEmail = transaction.patrons?.email // Changed from borrowers?.email
       const borrowerName = getBorrowerName(transaction)
       const bookTitle = getBookTitle(transaction)
       const daysOverdue = getDaysOverdue(transaction)
       const dueDate = new Date(transaction.due_date).toLocaleDateString()
 
       if (!borrowerEmail) {
-        toast.error("This borrower has no email address on file.")
+        toast.error("This patron has no email address on file.")
         return
       }
 
@@ -511,16 +511,16 @@ export default function TransactionsPage() {
 
   // Filter active transactions based on search
   const filteredTransactions = enhancedTransactions.filter(t => {
-    const borrowerName = getBorrowerName(t).toLowerCase()
-    const bookTitle = getBookTitle(t).toLowerCase()
-    const borrowerMatch = borrowerName.includes(search.borrower.toLowerCase())
-    const bookMatch = bookTitle.includes(search.book.toLowerCase())
-    const dateMatch = search.date
-      ? new Date(t.due_date).toISOString().split("T")[0] === search.date
-      : true
-    const activeStatus = t.status !== "returned"
-    return borrowerMatch && bookMatch && dateMatch && activeStatus
-  })
+  const borrowerName = getBorrowerName(t).toLowerCase()
+  const bookTitle = getBookTitle(t).toLowerCase()
+  const borrowerMatch = borrowerName.includes(search.borrower.toLowerCase())
+  const bookMatch = bookTitle.includes(search.book.toLowerCase())
+  const dateMatch = search.date
+    ? new Date(t.due_date).toISOString().split("T")[0] === search.date
+    : true
+  const activeStatus = t.status !== "returned" // This should catch both "active" and "borrowed" status
+  return borrowerMatch && bookMatch && dateMatch && activeStatus
+})
 
   // Filter history transactions based on search
   const filteredHistory = enhancedTransactions
