@@ -1742,13 +1742,6 @@ export default function TransactionsPage() {
                     )}
                   </Button>
                 </div>
-
-                {/* Success Message */}
-                <div className="text-center">
-                  <p className="text-sm text-muted-foreground">
-                    After adding a transaction, the form will reset so you can add another one.
-                  </p>
-                </div>
               </form>
             </div>
           </div>
