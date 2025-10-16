@@ -341,27 +341,27 @@ export default function PatronPage() {
             {/* Header */}
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4">
               <div className="flex-1 min-w-0">
-                <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent break-words">
+                <h1 className="text-xl sm:text-2xl md:text-3xl lg:text-4xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent text-balance">
                   Patrons
                 </h1>
-                <p className="text-muted-foreground text-sm sm:text-base mt-1">
+                <p className="text-muted-foreground text-xs sm:text-sm mt-1">
                   Manage library members and their information
                 </p>
               </div>
               <Button
                 variant="outline"
                 onClick={() => setShowArchived(!showArchived)}
-                className="backdrop-blur-sm border-border/50 hover:bg-indigo-50 hover:border-indigo-200 w-full sm:w-auto"
+                className="backdrop-blur-sm border-border/50 hover:bg-indigo-50 hover:border-indigo-200 w-full sm:w-auto h-10 text-xs sm:text-sm"
               >
                 {showArchived ? (
                   <>
                     <Users className="h-4 w-4 mr-2" />
-                    <span className="text-sm">View Active</span>
+                    <span>View Active</span>
                   </>
                 ) : (
                   <>
                     <Archive className="h-4 w-4 mr-2" />
-                    <span className="text-sm">View Archived</span>
+                    <span>View Archived</span>
                   </>
                 )}
               </Button>
@@ -760,10 +760,11 @@ export default function PatronPage() {
                                           size="sm"
                                           variant="outline"
                                           onClick={() => confirmPermanentDelete(p)}
-                                          className="backdrop-blur-sm border-border/50 hover:bg-red-50 hover:border-red-200 text-red-600 h-8 px-2 text-xs"
+                                          className="bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-700 hover:to-rose-700 text-white h-8 px-2 text-xs"
                                           title="Permanently delete patron"
                                         >
-                                          <Trash2 className="h-4 w-4" />
+                                          <Trash2 className="h-4 w-4 mr-2" />
+                                          Delete Permanently
                                         </Button>
                                       </>
                                     )}
