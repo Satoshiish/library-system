@@ -1,5 +1,7 @@
 "use client"
 
+import type React from "react"
+
 import { useState, useEffect } from "react"
 import { useRouter, useParams } from "next/navigation"
 import { AuthGuard } from "@/components/auth-guard"
@@ -16,10 +18,7 @@ import { createClient } from "@supabase/supabase-js"
 import { cn } from "@/lib/utils"
 import { toast } from "sonner"
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-)
+const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!)
 
 export default function EditBookPage() {
   const router = useRouter()
@@ -110,10 +109,7 @@ export default function EditBookPage() {
       }
 
       // Update the book
-      const { error: updateError } = await supabase
-        .from("books")
-        .update(formData)
-        .eq("id", bookId)
+      const { error: updateError } = await supabase.from("books").update(formData).eq("id", bookId)
 
       if (updateError) {
         setError("Failed to update book. Please try again.")
@@ -133,7 +129,7 @@ export default function EditBookPage() {
   // Soft Delete (Archive)
   const handleArchive = async () => {
     if (!bookId) return
-    
+
     toast.custom((t) => (
       <div className="bg-white border border-border rounded-lg shadow-lg p-4 max-w-sm">
         <div className="flex flex-col space-y-3">
@@ -142,12 +138,7 @@ export default function EditBookPage() {
             Are you sure you want to archive this book? This action can be undone.
           </p>
           <div className="flex justify-end space-x-2 pt-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => toast.dismiss(t)}
-              className="h-9"
-            >
+            <Button variant="outline" size="sm" onClick={() => toast.dismiss(t)} className="h-9">
               Cancel
             </Button>
             <Button
@@ -169,14 +160,11 @@ export default function EditBookPage() {
 
   const performArchive = async () => {
     if (!bookId) return
-    
+
     setIsLoading(true)
     try {
-      const { error } = await supabase
-        .from("books")
-        .update({ status: "archived" })
-        .eq("id", bookId)
-      
+      const { error } = await supabase.from("books").update({ status: "archived" }).eq("id", bookId)
+
       if (error) {
         setError("Failed to archive book. Please try again.")
         toast.error("Failed to archive book")
@@ -196,39 +184,39 @@ export default function EditBookPage() {
     <AuthGuard>
       <div className="flex min-h-screen bg-gradient-to-br from-slate-50 via-blue-50/30 to-indigo-100/50">
         <Sidebar />
-        <main className="flex-1 lg:ml-64 p-6">
-          <div className="max-w-2xl mx-auto space-y-6">
+        <main className="flex-1 lg:ml-64 p-4 sm:p-6 lg:p-8">
+          <div className="max-w-2xl mx-auto space-y-4 sm:space-y-6">
             {/* Header */}
-            <div className="flex items-center gap-4">
+            <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4">
               <Link href="/books">
-                <Button 
-                  variant="outline" 
+                <Button
+                  variant="outline"
                   size="sm"
-                  className="backdrop-blur-sm border-border/50 hover:bg-muted/30"
+                  className="w-full sm:w-auto backdrop-blur-sm border-border/50 hover:bg-muted/30 text-sm sm:text-base bg-transparent"
                 >
                   <ArrowLeft className="mr-2 h-4 w-4" />
                   Back to Books
                 </Button>
               </Link>
               <div>
-                <h1 className="text-3xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">
+                <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">
                   Edit Book
                 </h1>
-                <p className="text-muted-foreground">Update book information</p>
+                <p className="text-xs sm:text-sm text-muted-foreground mt-1">Update book information</p>
               </div>
             </div>
 
             <Card className="backdrop-blur-xl border-border/30 bg-gradient-to-b from-background/95 to-background/90 shadow-lg shadow-indigo-500/10">
               <CardHeader>
-                <CardTitle className="bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">
+                <CardTitle className="text-lg sm:text-xl bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">
                   Book Details
                 </CardTitle>
-                <CardDescription>Modify the details for this book</CardDescription>
+                <CardDescription className="text-xs sm:text-sm">Modify the details for this book</CardDescription>
               </CardHeader>
               <CardContent>
-                <form onSubmit={handleSubmit} className="space-y-6">
+                <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-6">
                   {/* Title & Author */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
                     <div className="space-y-3">
                       <Label htmlFor="title" className="text-sm font-medium text-foreground/80">
                         Title *
@@ -264,7 +252,7 @@ export default function EditBookPage() {
                   </div>
 
                   {/* ISBN & Category */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
                     <div className="space-y-3">
                       <Label htmlFor="isbn" className="text-sm font-medium text-foreground/80">
                         ISBN *
@@ -322,10 +310,7 @@ export default function EditBookPage() {
                     <Label htmlFor="status" className="text-sm font-medium text-foreground/80">
                       Status
                     </Label>
-                    <Select
-                      value={formData.status}
-                      onValueChange={(value) => handleInputChange("status", value)}
-                    >
+                    <Select value={formData.status} onValueChange={(value) => handleInputChange("status", value)}>
                       <SelectTrigger className="bg-background/50 border-border/50 focus:border-indigo-300 h-11">
                         <SelectValue />
                       </SelectTrigger>
@@ -345,7 +330,7 @@ export default function EditBookPage() {
                   )}
 
                   {/* Actions */}
-                  <div className="flex flex-col sm:flex-row gap-4 pt-4 border-t border-border/30">
+                  <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 pt-4 border-t border-border/30">
                     <Button
                       type="submit"
                       disabled={isLoading}
@@ -353,7 +338,7 @@ export default function EditBookPage() {
                         "flex-1 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700",
                         "text-white shadow-lg shadow-indigo-500/25 hover:shadow-indigo-500/40",
                         "transition-all duration-300 transform hover:scale-[1.02]",
-                        "border-0 h-11"
+                        "border-0 h-10 sm:h-11 text-sm sm:text-base",
                       )}
                     >
                       {isLoading ? (
@@ -373,7 +358,7 @@ export default function EditBookPage() {
                       variant="destructive"
                       onClick={handleArchive}
                       disabled={isLoading}
-                      className="h-11 backdrop-blur-sm"
+                      className="flex-1 h-10 sm:h-11 backdrop-blur-sm text-sm sm:text-base"
                     >
                       <Trash2 className="mr-2 h-4 w-4" />
                       Archive
@@ -382,7 +367,7 @@ export default function EditBookPage() {
                       <Button
                         type="button"
                         variant="outline"
-                        className="w-full h-11 backdrop-blur-sm border-border/50 hover:bg-muted/30"
+                        className="w-full h-10 sm:h-11 backdrop-blur-sm border-border/50 hover:bg-muted/30 text-sm sm:text-base bg-transparent"
                       >
                         Cancel
                       </Button>

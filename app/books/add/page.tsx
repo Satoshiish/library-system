@@ -1,5 +1,7 @@
 "use client"
 
+import type React from "react"
+
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { AuthGuard } from "@/components/auth-guard"
@@ -16,10 +18,7 @@ import { createClient } from "@supabase/supabase-js"
 import { cn } from "@/lib/utils"
 import { toast } from "sonner"
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-)
+const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!)
 
 export default function AddBookPage() {
   const router = useRouter()
@@ -45,7 +44,7 @@ export default function AddBookPage() {
 
       if (userId) {
         setCurrentUser({
-          id: parseInt(userId),
+          id: Number.parseInt(userId),
           email: userEmail,
           name: userName,
           role: userRole,
@@ -61,7 +60,7 @@ export default function AddBookPage() {
       if (!/^[A-Za-zÀ-ÖØ-öø-ÿ\s.,'-]*$/.test(value)) return
     }
     if (field === "isbn") {
-      if (!/^[0-9\-]*$/.test(value)) return
+      if (!/^[0-9-]*$/.test(value)) return
     }
 
     setFormData((prev) => ({ ...prev, [field]: value }))
@@ -86,7 +85,7 @@ export default function AddBookPage() {
       return false
     }
 
-    if (!/^[0-9\-]+$/.test(formData.isbn)) {
+    if (!/^[0-9-]+$/.test(formData.isbn)) {
       setError("ISBN must contain only numbers and hyphens.")
       toast.error("Invalid ISBN format")
       return false
@@ -109,7 +108,7 @@ export default function AddBookPage() {
 
     const addBookPromise = async () => {
       try {
-        const userId = currentUser?.id || parseInt(localStorage.getItem("userId") || "0")
+        const userId = currentUser?.id || Number.parseInt(localStorage.getItem("userId") || "0")
         if (!userId) {
           throw new Error("User not authenticated. Please log in again.")
         }
@@ -128,11 +127,7 @@ export default function AddBookPage() {
 
         // ✅ Insert book
         const bookData = { ...formData, added_by: userId }
-        const { data: newBook, error: bookError } = await supabase
-          .from("books")
-          .insert([bookData])
-          .select()
-          .single()
+        const { data: newBook, error: bookError } = await supabase.from("books").insert([bookData]).select().single()
 
         if (bookError) throw bookError
 
@@ -180,7 +175,7 @@ export default function AddBookPage() {
 
     // Use Sonner's promise-based toast for the loading state
     toast.promise(addBookPromise(), {
-      loading: 'Adding book to library...',
+      loading: "Adding book to library...",
       success: (data) => {
         return `"${formData.title}" has been added successfully!`
       },
@@ -191,7 +186,7 @@ export default function AddBookPage() {
       },
       finally: () => {
         setIsLoading(false)
-      }
+      },
     })
   }
 
@@ -199,20 +194,24 @@ export default function AddBookPage() {
     <AuthGuard>
       <div className="flex min-h-screen bg-gradient-to-br from-slate-50 via-blue-50/30 to-indigo-100/50">
         <Sidebar />
-        <main className="flex-1 lg:ml-64 p-6">
-          <div className="max-w-2xl mx-auto space-y-6">
-            <div className="flex items-center gap-4">
+        <main className="flex-1 lg:ml-64 p-4 sm:p-6 lg:p-8">
+          <div className="max-w-2xl mx-auto space-y-4 sm:space-y-6">
+            <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4">
               <Link href="/books">
-                <Button variant="outline" size="sm" className="backdrop-blur-sm border-border/50 hover:bg-muted/30">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="w-full sm:w-auto backdrop-blur-sm border-border/50 hover:bg-muted/30 text-sm sm:text-base bg-transparent"
+                >
                   <ArrowLeft className="mr-2 h-4 w-4" />
                   Back to Books
                 </Button>
               </Link>
               <div>
-                <h1 className="text-3xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">
+                <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">
                   Add New Book
                 </h1>
-                <p className="text-muted-foreground">
+                <p className="text-xs sm:text-sm text-muted-foreground mt-1">
                   {currentUser ? `Adding as: ${currentUser.email}` : "Enter book details"}
                 </p>
               </div>
@@ -220,15 +219,15 @@ export default function AddBookPage() {
 
             <Card className="backdrop-blur-xl border-border/30 bg-gradient-to-b from-background/95 to-background/90 shadow-lg">
               <CardHeader>
-                <CardTitle className="bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">
+                <CardTitle className="text-lg sm:text-xl bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">
                   Book Details
                 </CardTitle>
-                <CardDescription>All fields marked * are required.</CardDescription>
+                <CardDescription className="text-xs sm:text-sm">All fields marked * are required.</CardDescription>
               </CardHeader>
               <CardContent>
-                <form onSubmit={handleSubmit} className="space-y-6">
+                <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-6">
                   {/* Title & Author */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
                     <div className="space-y-3">
                       <Label htmlFor="title">Title *</Label>
                       <div className="relative">
@@ -260,7 +259,7 @@ export default function AddBookPage() {
                   </div>
 
                   {/* ISBN & Category */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
                     <div className="space-y-3">
                       <Label htmlFor="isbn">ISBN *</Label>
                       <div className="relative">
@@ -287,13 +286,20 @@ export default function AddBookPage() {
                             <SelectValue placeholder="Select category" />
                           </SelectTrigger>
                           <SelectContent>
-                            {["Fiction", "Non-Fiction", "Science", "History", "Biography", "Romance", "Mystery", "Fantasy"].map(
-                              (cat) => (
-                                <SelectItem key={cat} value={cat}>
-                                  {cat}
-                                </SelectItem>
-                              )
-                            )}
+                            {[
+                              "Fiction",
+                              "Non-Fiction",
+                              "Science",
+                              "History",
+                              "Biography",
+                              "Romance",
+                              "Mystery",
+                              "Fantasy",
+                            ].map((cat) => (
+                              <SelectItem key={cat} value={cat}>
+                                {cat}
+                              </SelectItem>
+                            ))}
                           </SelectContent>
                         </Select>
                       </div>
@@ -325,15 +331,15 @@ export default function AddBookPage() {
                   )}
 
                   {/* Actions */}
-                  <div className="flex flex-col sm:flex-row gap-4 pt-4 border-t border-border/30">
-                    <Button 
-                      type="submit" 
-                      disabled={isLoading} 
+                  <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 pt-4 border-t border-border/30">
+                    <Button
+                      type="submit"
+                      disabled={isLoading}
                       className={cn(
                         "flex-1 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700",
                         "text-white shadow-lg shadow-indigo-500/25 hover:shadow-indigo-500/40",
                         "transition-all duration-300 transform hover:scale-[1.02]",
-                        "border-0 h-11"
+                        "border-0 h-10 sm:h-11 text-sm sm:text-base",
                       )}
                     >
                       {isLoading ? (
@@ -347,10 +353,10 @@ export default function AddBookPage() {
                       )}
                     </Button>
                     <Link href="/books" className="flex-1">
-                      <Button 
-                        type="button" 
-                        variant="outline" 
-                        className="w-full h-11 backdrop-blur-sm border-border/50 hover:bg-muted/30"
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="w-full h-10 sm:h-11 backdrop-blur-sm border-border/50 hover:bg-muted/30 text-sm sm:text-base bg-transparent"
                       >
                         Cancel
                       </Button>

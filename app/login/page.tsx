@@ -21,7 +21,7 @@ const SESSION_KEYS = {
   userName: "userName",
   loginTime: "loginTime",
   expiresAt: "expiresAt",
-  sessionToken: "sessionToken"
+  sessionToken: "sessionToken",
 }
 
 const SESSION_DURATION = 60 * 60 * 1000 // 1 hour in milliseconds
@@ -31,7 +31,7 @@ function generateSessionToken(): string {
 }
 
 function clearSession(): void {
-  Object.values(SESSION_KEYS).forEach(key => {
+  Object.values(SESSION_KEYS).forEach((key) => {
     localStorage.removeItem(key)
   })
   // Clear cookies
@@ -41,7 +41,7 @@ function clearSession(): void {
 }
 
 function validateSession(): boolean {
-  if (typeof window === 'undefined') return false
+  if (typeof window === "undefined") return false
 
   const isAuthenticated = localStorage.getItem(SESSION_KEYS.isAuthenticated)
   const expiresAt = localStorage.getItem(SESSION_KEYS.expiresAt)
@@ -52,7 +52,7 @@ function validateSession(): boolean {
   }
 
   const now = Date.now()
-  const expirationTime = parseInt(expiresAt)
+  const expirationTime = Number.parseInt(expiresAt)
 
   // Check if session has expired
   if (now > expirationTime) {
@@ -76,18 +76,18 @@ export default function LoginPage() {
   useEffect(() => {
     // Clear any expired sessions on page load
     const expiresAt = localStorage.getItem(SESSION_KEYS.expiresAt)
-    if (expiresAt && Date.now() > parseInt(expiresAt)) {
+    if (expiresAt && Date.now() > Number.parseInt(expiresAt)) {
       clearSession()
     }
 
     // If user is already authenticated and session is valid, redirect to dashboard
     if (validateSession()) {
-      const timeLeft = parseInt(localStorage.getItem(SESSION_KEYS.expiresAt)!) - Date.now()
+      const timeLeft = Number.parseInt(localStorage.getItem(SESSION_KEYS.expiresAt)!) - Date.now()
       setSessionTimeLeft(timeLeft)
-      
+
       // Show message about existing session
       setSuccess("You are already logged in. Redirecting to dashboard...")
-      
+
       const redirectTimer = setTimeout(() => {
         router.push("/dashboard")
       }, 2000)
@@ -101,7 +101,7 @@ export default function LoginPage() {
     if (!sessionTimeLeft || sessionTimeLeft <= 0) return
 
     const timer = setInterval(() => {
-      setSessionTimeLeft(prev => {
+      setSessionTimeLeft((prev) => {
         if (prev && prev > 1000) return prev - 1000
         clearInterval(timer)
         return 0
@@ -124,7 +124,7 @@ export default function LoginPage() {
       return
     }
 
-    if (!email.includes('@')) {
+    if (!email.includes("@")) {
       setError("Please enter a valid email address")
       setIsLoading(false)
       return
@@ -133,9 +133,9 @@ export default function LoginPage() {
     try {
       const response = await fetch("/api/auth/login", {
         method: "POST",
-        headers: { 
+        headers: {
           "Content-Type": "application/json",
-          "X-Requested-With": "XMLHttpRequest"
+          "X-Requested-With": "XMLHttpRequest",
         },
         body: JSON.stringify({ email, password }),
       })
@@ -172,7 +172,7 @@ export default function LoginPage() {
         document.cookie = `sessionExpires=${expiresAt}; ${cookieOptions}`
 
         setSuccess("Login successful! Redirecting to dashboard...")
-        
+
         // Clear form
         setEmail("")
         setPassword("")
@@ -181,13 +181,12 @@ export default function LoginPage() {
         setTimeout(() => {
           router.push("/dashboard")
         }, 1500)
-        
+
         return
       }
 
       // If login failed
       setError(data.error || "Invalid email or password. Please try again.")
-      
     } catch (err) {
       console.error("Login error:", err)
       setError("Network error. Please check your connection and try again.")
@@ -205,25 +204,27 @@ export default function LoginPage() {
   const formatTimeLeft = (ms: number): string => {
     const minutes = Math.floor(ms / 60000)
     const seconds = Math.floor((ms % 60000) / 1000)
-    return `${minutes}:${seconds.toString().padStart(2, '0')}`
+    return `${minutes}:${seconds.toString().padStart(2, "0")}`
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50/30 to-indigo-100/50 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50/30 to-indigo-100/50 flex items-center justify-center p-4 sm:p-6 lg:p-8">
       {/* Background decorative elements */}
       <div className="absolute inset-0 overflow-hidden">
         <div className="absolute -top-40 -right-40 w-80 h-80 bg-gradient-to-r from-indigo-400/20 to-purple-400/20 rounded-full blur-3xl"></div>
         <div className="absolute -bottom-40 -left-40 w-80 h-80 bg-gradient-to-r from-blue-400/20 to-cyan-400/20 rounded-full blur-3xl"></div>
       </div>
 
-      <Card className={cn(
-        "w-full max-w-md backdrop-blur-xl border-border/30 bg-gradient-to-b from-background/95 to-background/90",
-        "shadow-2xl shadow-indigo-500/10 border-0 relative overflow-hidden"
-      )}>
+      <Card
+        className={cn(
+          "w-full max-w-md backdrop-blur-xl border-border/30 bg-gradient-to-b from-background/95 to-background/90",
+          "shadow-2xl shadow-indigo-500/10 border-0 relative overflow-hidden",
+        )}
+      >
         {/* Card accent gradient */}
         <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-indigo-500 to-purple-500"></div>
-        
-        <CardHeader className="text-center pb-6">
+
+        <CardHeader className="text-center pb-4 sm:pb-6">
           <div className="flex justify-center mb-4">
             <div className="bg-gradient-to-tr from-indigo-500 to-purple-500 p-3 rounded-2xl shadow-lg">
               <BookOpen className="h-8 w-8 text-white" />
@@ -238,8 +239,8 @@ export default function LoginPage() {
             <span className="text-xs">Session expires after 1 hour of inactivity</span>
           </CardDescription>
         </CardHeader>
-        
-        <CardContent className="pb-6">
+
+        <CardContent className="pb-4 sm:pb-6 px-4 sm:px-6">
           {/* Existing Session Info */}
           {sessionTimeLeft && sessionTimeLeft > 0 && (
             <Alert className="mb-4 bg-blue-50 border-blue-200">
@@ -259,9 +260,7 @@ export default function LoginPage() {
           {success && (
             <Alert className="mb-4 bg-green-50 border-green-200">
               <CheckCircle2 className="h-4 w-4 text-green-600" />
-              <AlertDescription className="text-green-700">
-                {success}
-              </AlertDescription>
+              <AlertDescription className="text-green-700">{success}</AlertDescription>
             </Alert>
           )}
 
@@ -269,13 +268,11 @@ export default function LoginPage() {
           {error && (
             <Alert variant="destructive" className="mb-4">
               <AlertCircle className="h-4 w-4" />
-              <AlertDescription>
-                {error}
-              </AlertDescription>
+              <AlertDescription>{error}</AlertDescription>
             </Alert>
           )}
 
-          <form onSubmit={handleLogin} className="space-y-5">
+          <form onSubmit={handleLogin} className="space-y-4 sm:space-y-5">
             <div className="space-y-3">
               <Label htmlFor="email" className="text-sm font-medium text-foreground">
                 Email Address
@@ -321,17 +318,17 @@ export default function LoginPage() {
                 />
               </div>
             </div>
-            
+
             <div className="space-y-3">
-              <Button 
-                type="submit" 
+              <Button
+                type="submit"
                 className={cn(
                   "w-full bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700",
                   "text-white shadow-lg shadow-indigo-500/25 hover:shadow-indigo-500/40",
                   "transition-all duration-300 transform hover:scale-[1.02] active:scale-[0.98]",
                   "border-0 h-11 font-medium",
-                  "disabled:opacity-50 disabled:transform-none disabled:hover:scale-100"
-                )} 
+                  "disabled:opacity-50 disabled:transform-none disabled:hover:scale-100",
+                )}
                 disabled={isLoading}
               >
                 {isLoading ? (
@@ -350,7 +347,7 @@ export default function LoginPage() {
           </form>
 
           {/* Session Info Footer */}
-          <div className="mt-6 pt-4 border-t border-border/50">
+          <div className="mt-4 sm:mt-6 pt-4 border-t border-border/50">
             <div className="flex items-center justify-center text-xs text-muted-foreground">
               <Shield className="h-3 w-3 mr-1" />
               Your session will be securely stored for 1 hour

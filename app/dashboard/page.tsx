@@ -6,15 +6,23 @@ import { Sidebar } from "@/components/layout/sidebar"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { BookOpen, User, TrendingUp, Plus, Eye, Loader2, ArrowUpRight, Users, BookCopy, AlertTriangle } from "lucide-react"
+import {
+  BookOpen,
+  User,
+  TrendingUp,
+  Plus,
+  Eye,
+  Loader2,
+  ArrowUpRight,
+  Users,
+  BookCopy,
+  AlertTriangle,
+} from "lucide-react"
 import Link from "next/link"
 import { createClient } from "@supabase/supabase-js"
 import { cn } from "@/lib/utils"
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-)
+const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!)
 
 export default function DashboardPage() {
   const [dashboardStats, setDashboardStats] = useState({
@@ -37,26 +45,22 @@ export default function DashboardPage() {
         console.log("🔄 Starting dashboard data fetch...")
 
         // Fetch books
-        const { data: booksData, error: booksError } = await supabase
-          .from("books")
-          .select("*")
+        const { data: booksData, error: booksError } = await supabase.from("books").select("*")
         if (booksError) console.error("❌ Books fetch error:", booksError)
         else console.log("✅ Books data:", booksData?.length)
 
         // Fetch patrons FIRST to ensure we have the data
-        const { data: patronsData, error: patronsError } = await supabase
-          .from("patrons")
-          .select("*")
+        const { data: patronsData, error: patronsError } = await supabase.from("patrons").select("*")
         if (patronsError) console.error("❌ Patrons fetch error:", patronsError)
         else console.log("✅ Patrons data:", patronsData?.length)
 
         // Create patron map for quick lookup
-        const patronMap = new Map(patronsData?.map(p => [p.id, p]) || [])
+        const patronMap = new Map(patronsData?.map((p) => [p.id, p]) || [])
         console.log("🗺️ Patron map created with", patronMap.size, "entries")
 
         // ✅ FIXED: Try different query approaches for loans
         let loansData: any[] = []
-        let loansError: any = null
+        const loansError: any = null
 
         // Approach 1: Try with joins first
         const { data: loansData1, error: error1 } = await supabase
@@ -71,7 +75,7 @@ export default function DashboardPage() {
         if (!error1 && loansData1 && loansData1.length > 0) {
           console.log("✅ Approach 1 - Joined loans data:", loansData1.length)
           loansData = loansData1
-          
+
           // Debug: Check if patron data is included
           if (loansData1[0]?.patrons) {
             console.log("🔍 First loan patron data:", loansData1[0].patrons)
@@ -80,7 +84,7 @@ export default function DashboardPage() {
           }
         } else {
           console.log("❌ Approach 1 failed:", error1)
-          
+
           // Approach 2: Basic loans query as fallback
           const { data: loansData2, error: error2 } = await supabase
             .from("loans")
@@ -96,18 +100,18 @@ export default function DashboardPage() {
         }
 
         // 🧩 Create book map for quick lookup
-        const bookMap = new Map(booksData?.map(b => [b.id, b]) || [])
+        const bookMap = new Map(booksData?.map((b) => [b.id, b]) || [])
 
         // If we have loans but no joined data, manually attach book/patron details
-        loansData = loansData.map(loan => {
+        loansData = loansData.map((loan) => {
           const patronFromMap = patronMap.get(loan.patron_id)
           const bookFromMap = bookMap.get(loan.book_id)
-          
+
           console.log(`🔍 Loan ${loan.id}:`, {
             patron_id: loan.patron_id,
             hasJoinedPatron: !!loan.patrons,
             hasMappedPatron: !!patronFromMap,
-            patronName: patronFromMap?.full_name || 'No name found'
+            patronName: patronFromMap?.full_name || "No name found",
           })
 
           return {
@@ -119,16 +123,16 @@ export default function DashboardPage() {
 
         // 📊 Calculate stats - UPDATED to use "borrowed" status
         const totalBooks = booksData?.length || 0
-        const availableBooks = booksData?.filter(b => b.status === "available").length || 0
-        const borrowedBooks = booksData?.filter(b => b.status === "borrowed").length || 0
-        const reservedBooks = booksData?.filter(b => b.status === "reserved").length || 0
+        const availableBooks = booksData?.filter((b) => b.status === "available").length || 0
+        const borrowedBooks = booksData?.filter((b) => b.status === "borrowed").length || 0
+        const reservedBooks = booksData?.filter((b) => b.status === "reserved").length || 0
         const totalBorrowers = patronsData?.length || 0
 
         // ✅ Overdue calculation
         const today = new Date()
         today.setHours(0, 0, 0, 0)
 
-        const overdueLoans = loansData.filter(loan => {
+        const overdueLoans = loansData.filter((loan) => {
           if (loan.status === "returned" || loan.returned_date) return false
 
           let dueDate: Date | null = null
@@ -157,20 +161,20 @@ export default function DashboardPage() {
         })
 
         // ✅ Recent activity - IMPROVED patron name resolution
-        const recentActivityData = loansData.slice(0, 5).map(loan => {
+        const recentActivityData = loansData.slice(0, 5).map((loan) => {
           // Get patron name with multiple fallbacks
-          let borrowerName = `Patron ${loan.patron_id}`;
-          
+          let borrowerName = `Patron ${loan.patron_id}`
+
           // Try joined patron data first
           if (loan.patrons?.full_name) {
-            borrowerName = loan.patrons.full_name;
+            borrowerName = loan.patrons.full_name
             console.log(`✅ Using joined patron data for ${loan.patron_id}: ${borrowerName}`)
-          } 
+          }
           // Fallback to patron map
           else {
-            const patron = patronMap.get(loan.patron_id);
+            const patron = patronMap.get(loan.patron_id)
             if (patron?.full_name) {
-              borrowerName = patron.full_name;
+              borrowerName = patron.full_name
               console.log(`✅ Using mapped patron data for ${loan.patron_id}: ${borrowerName}`)
             } else {
               console.log(`❌ No patron name found for ${loan.patron_id}`)
@@ -191,14 +195,14 @@ export default function DashboardPage() {
 
         // Popular books
         const checkoutCounts: Record<string, number> = {}
-        loansData.forEach(loan => {
+        loansData.forEach((loan) => {
           if (loan.book_id) {
             checkoutCounts[loan.book_id] = (checkoutCounts[loan.book_id] || 0) + 1
           }
         })
         const popularBooksList = Object.entries(checkoutCounts)
           .map(([book_id, count]) => {
-            const book = booksData?.find(b => b.id === book_id)
+            const book = booksData?.find((b) => b.id === book_id)
             if (!book) return null
             return { id: book_id, title: book.title, author: book.author, checkouts: count }
           })
@@ -208,28 +212,25 @@ export default function DashboardPage() {
         setPopularBooks(popularBooksList)
 
         // ✅ Overdue books - IMPROVED patron name resolution
-        const overdueBooksList = overdueLoans.map(loan => {
+        const overdueBooksList = overdueLoans.map((loan) => {
           const dueDate = loan.due_date
             ? new Date(loan.due_date)
             : loan.doc_date
-            ? new Date(loan.doc_date)
-            : new Date(loan.created_at)
+              ? new Date(loan.doc_date)
+              : new Date(loan.created_at)
           if (!loan.doc_date && !loan.due_date) dueDate.setDate(dueDate.getDate() + 14)
 
-          const daysOverdue = Math.max(
-            0,
-            Math.ceil((today.getTime() - dueDate.getTime()) / (1000 * 60 * 60 * 24))
-          )
+          const daysOverdue = Math.max(0, Math.ceil((today.getTime() - dueDate.getTime()) / (1000 * 60 * 60 * 24)))
 
           // Get patron name with multiple fallbacks
-          let borrowerName = `Patron ${loan.patron_id}`;
-          
+          let borrowerName = `Patron ${loan.patron_id}`
+
           if (loan.patrons?.full_name) {
-            borrowerName = loan.patrons.full_name;
+            borrowerName = loan.patrons.full_name
           } else {
-            const patron = patronMap.get(loan.patron_id);
+            const patron = patronMap.get(loan.patron_id)
             if (patron?.full_name) {
-              borrowerName = patron.full_name;
+              borrowerName = patron.full_name
             }
           }
 
@@ -249,13 +250,14 @@ export default function DashboardPage() {
           totalLoans: loansData.length,
           totalPatrons: patronsData?.length,
           patronMapSize: patronMap.size,
-          sampleRecentActivity: recentActivityData[0] ? {
-            loanId: recentActivityData[0].id,
-            borrowerName: recentActivityData[0].borrowerName,
-            hasProperName: !recentActivityData[0].borrowerName.includes('Patron ')
-          } : 'No recent activity'
+          sampleRecentActivity: recentActivityData[0]
+            ? {
+                loanId: recentActivityData[0].id,
+                borrowerName: recentActivityData[0].borrowerName,
+                hasProperName: !recentActivityData[0].borrowerName.includes("Patron "),
+              }
+            : "No recent activity",
         })
-
       } catch (err) {
         console.error("❌ Error fetching dashboard data:", err)
       } finally {
@@ -281,30 +283,37 @@ export default function DashboardPage() {
     <AuthGuard>
       <div className="flex min-h-screen bg-gradient-to-br from-slate-50 via-blue-50/30 to-indigo-100/50">
         <Sidebar />
-        <main className="flex-1 lg:ml-64 p-6">
-          <div className="max-w-7xl mx-auto space-y-6">
+        <main className="flex-1 lg:ml-64 p-4 sm:p-6 lg:p-8">
+          <div className="max-w-7xl mx-auto space-y-4 sm:space-y-6">
             {/* Header */}
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4">
               <div>
-                <h1 className="text-3xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">
+                <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">
                   Dashboard
                 </h1>
-                <p className="text-muted-foreground">Library inventory overview and statistics</p>
+                <p className="text-xs sm:text-sm text-muted-foreground mt-1">
+                  Library inventory overview and statistics
+                </p>
               </div>
-              <div className="flex gap-2">
-                <Link href="/books/add">
-                  <Button className={cn(
-                    "bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700",
-                    "text-white shadow-lg shadow-indigo-500/25 hover:shadow-indigo-500/40",
-                    "transition-all duration-300 transform hover:scale-[1.02]",
-                    "border-0 backdrop-blur-sm"
-                  )}>
+              <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+                <Link href="/books/add" className="flex-1 sm:flex-none">
+                  <Button
+                    className={cn(
+                      "w-full bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700",
+                      "text-white shadow-lg shadow-indigo-500/25 hover:shadow-indigo-500/40",
+                      "transition-all duration-300 transform hover:scale-[1.02]",
+                      "border-0 text-sm sm:text-base",
+                    )}
+                  >
                     <Plus className="mr-2 h-4 w-4" />
                     Add Book
                   </Button>
                 </Link>
-                <Link href="/transactions">
-                  <Button variant="outline" className="backdrop-blur-sm border-border/50">
+                <Link href="/transactions" className="flex-1 sm:flex-none">
+                  <Button
+                    variant="outline"
+                    className="w-full sm:w-auto backdrop-blur-sm border-border/50 text-sm sm:text-base bg-transparent"
+                  >
                     <Eye className="mr-2 h-4 w-4" />
                     View Transactions
                   </Button>
@@ -312,8 +321,8 @@ export default function DashboardPage() {
               </div>
             </div>
 
-            {/* Stats Cards - REMOVED Overdue card from top row */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {/* Stats Cards - CHANGE: responsive grid */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 lg:gap-6">
               <Card className="backdrop-blur-xl border-border/30 bg-gradient-to-b from-background/95 to-background/90 shadow-lg shadow-indigo-500/10">
                 <CardHeader className="flex flex-row items-center justify-between pb-2">
                   <CardTitle className="text-sm font-medium text-foreground/80">Total Books</CardTitle>
@@ -325,9 +334,7 @@ export default function DashboardPage() {
                   <div className="text-2xl font-bold text-foreground">{dashboardStats.totalBooks}</div>
                   <p className="text-xs text-muted-foreground flex items-center gap-1">
                     <ArrowUpRight className="h-3 w-3 text-green-600" />
-                    <span className="text-green-600">
-                      +{dashboardStats.availableBooks} available
-                    </span>
+                    <span className="text-green-600">+{dashboardStats.availableBooks} available</span>
                   </p>
                 </CardContent>
               </Card>
@@ -368,7 +375,7 @@ export default function DashboardPage() {
             </div>
 
             {/* Additional Stats Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 lg:gap-6">
               <Card className="backdrop-blur-xl border-border/30 bg-gradient-to-b from-background/95 to-background/90 shadow-lg shadow-indigo-500/10">
                 <CardHeader className="flex flex-row items-center justify-between pb-2">
                   <CardTitle className="text-sm font-medium text-foreground/80">Total Patrons</CardTitle>
@@ -405,13 +412,17 @@ export default function DashboardPage() {
                     Overdue Books - Requires Attention!
                   </CardTitle>
                   <CardDescription>
-                    {overdueBooks.length} book{overdueBooks.length !== 1 ? 's' : ''} that need to be returned immediately
+                    {overdueBooks.length} book{overdueBooks.length !== 1 ? "s" : ""} that need to be returned
+                    immediately
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-3">
-                    {overdueBooks.map(book => (
-                      <div key={book.id} className="flex items-center justify-between p-4 bg-destructive/10 rounded-lg backdrop-blur-sm border border-destructive/20">
+                    {overdueBooks.map((book) => (
+                      <div
+                        key={book.id}
+                        className="flex items-center justify-between p-4 bg-destructive/10 rounded-lg backdrop-blur-sm border border-destructive/20"
+                      >
                         <div className="flex-1">
                           <p className="font-medium">{book.title}</p>
                           <p className="text-sm text-muted-foreground">
@@ -420,7 +431,7 @@ export default function DashboardPage() {
                         </div>
                         <div className="text-right">
                           <Badge variant="destructive" className="backdrop-blur-sm">
-                            {book.daysOverdue} day{book.daysOverdue !== 1 ? 's' : ''} overdue
+                            {book.daysOverdue} day{book.daysOverdue !== 1 ? "s" : ""} overdue
                           </Badge>
                           <p className="text-xs text-muted-foreground mt-1">
                             Due: {new Date(book.dueDate).toLocaleDateString()}
@@ -431,9 +442,9 @@ export default function DashboardPage() {
                   </div>
                   <div className="mt-4">
                     <Link href="/transactions?filter=overdue">
-                      <Button 
-                        variant="outline" 
-                        size="sm" 
+                      <Button
+                        variant="outline"
+                        size="sm"
                         className="w-full bg-transparent backdrop-blur-sm border-destructive/50 hover:bg-destructive/10 text-destructive"
                       >
                         <Eye className="mr-2 h-4 w-4" />
@@ -453,15 +464,13 @@ export default function DashboardPage() {
                     <TrendingUp className="h-5 w-5" />
                     All Clear!
                   </CardTitle>
-                  <CardDescription>
-                    No overdue books. All items are returned on time or not yet due.
-                  </CardDescription>
+                  <CardDescription>No overdue books. All items are returned on time or not yet due.</CardDescription>
                 </CardHeader>
               </Card>
             )}
 
             {/* Recent Activity & Popular Books */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 sm:gap-4 lg:gap-6">
               {/* Recent Activity */}
               <Card className="backdrop-blur-xl border-border/30 bg-gradient-to-b from-background/95 to-background/90 shadow-lg shadow-indigo-500/10">
                 <CardHeader>
@@ -472,7 +481,7 @@ export default function DashboardPage() {
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-4">
-                    {recentActivity.map(activity => {
+                    {recentActivity.map((activity) => {
                       // UPDATED: Action types to match "borrowed" terminology
                       const getActionInfo = () => {
                         switch (activity.status) {
@@ -480,26 +489,26 @@ export default function DashboardPage() {
                             return {
                               action: "Returned",
                               color: "bg-gradient-to-r from-green-500 to-emerald-500",
-                              textColor: "text-green-600"
+                              textColor: "text-green-600",
                             }
                           case "borrowed":
                           case "active":
                             return {
                               action: "Borrowed",
                               color: "bg-gradient-to-r from-blue-500 to-cyan-500",
-                              textColor: "text-blue-600"
+                              textColor: "text-blue-600",
                             }
                           case "reserved":
                             return {
                               action: "Reserved",
                               color: "bg-gradient-to-r from-amber-500 to-yellow-500",
-                              textColor: "text-amber-600"
+                              textColor: "text-amber-600",
                             }
                           default:
                             return {
                               action: "Processed",
                               color: "bg-gradient-to-r from-gray-500 to-gray-400",
-                              textColor: "text-gray-600"
+                              textColor: "text-gray-600",
                             }
                         }
                       }
@@ -507,27 +516,23 @@ export default function DashboardPage() {
                       const actionInfo = getActionInfo()
 
                       return (
-                        <div key={activity.id} className="flex items-center justify-between p-3 rounded-lg hover:bg-muted/30 transition-colors group">
+                        <div
+                          key={activity.id}
+                          className="flex items-center justify-between p-3 rounded-lg hover:bg-muted/30 transition-colors group"
+                        >
                           <div className="flex items-center gap-3 flex-1 min-w-0">
                             <div
-                              className={cn(
-                                "w-2 h-2 rounded-full transition-all flex-shrink-0",
-                                actionInfo.color
-                              )}
+                              className={cn("w-2 h-2 rounded-full transition-all flex-shrink-0", actionInfo.color)}
                             />
                             <div className="flex-1 min-w-0">
-                              <p className="text-sm font-medium truncate text-foreground">
-                                {activity.title}
-                              </p>
+                              <p className="text-sm font-medium truncate text-foreground">{activity.title}</p>
                               <p className="text-xs text-muted-foreground truncate">
-                                <span className={actionInfo.textColor}>{actionInfo.action}</span> 
+                                <span className={actionInfo.textColor}>{actionInfo.action}</span>
                                 {" by "}
                                 <span className="font-medium text-foreground/90">{activity.borrowerName}</span>
                               </p>
                               {activity.author && activity.author !== "Unknown Author" && (
-                                <p className="text-xs text-muted-foreground truncate mt-1">
-                                  by {activity.author}
-                                </p>
+                                <p className="text-xs text-muted-foreground truncate mt-1">by {activity.author}</p>
                               )}
                             </div>
                           </div>
@@ -549,9 +554,9 @@ export default function DashboardPage() {
                   </div>
                   <div className="mt-4">
                     <Link href="/transactions">
-                      <Button 
-                        variant="outline" 
-                        size="sm" 
+                      <Button
+                        variant="outline"
+                        size="sm"
                         className="w-full bg-transparent backdrop-blur-sm border-border/50 hover:bg-muted/30 hover:border-indigo-200 transition-colors"
                       >
                         <Eye className="mr-2 h-4 w-4" />
@@ -573,15 +578,23 @@ export default function DashboardPage() {
                 <CardContent>
                   <div className="space-y-4">
                     {popularBooks.map((book, index) => (
-                      <div key={book.id} className="flex items-center justify-between p-3 rounded-lg hover:bg-muted/30 transition-colors">
+                      <div
+                        key={book.id}
+                        className="flex items-center justify-between p-3 rounded-lg hover:bg-muted/30 transition-colors"
+                      >
                         <div className="flex items-center gap-3">
-                          <div className={cn(
-                            "flex items-center justify-center w-6 h-6 rounded-full text-xs font-bold text-white",
-                            index === 0 ? "bg-gradient-to-r from-amber-500 to-yellow-500" :
-                            index === 1 ? "bg-gradient-to-r from-gray-500 to-gray-400" :
-                            index === 2 ? "bg-gradient-to-r from-orange-500 to-red-500" :
-                            "bg-gradient-to-r from-indigo-500 to-purple-500"
-                          )}>
+                          <div
+                            className={cn(
+                              "flex items-center justify-center w-6 h-6 rounded-full text-xs font-bold text-white",
+                              index === 0
+                                ? "bg-gradient-to-r from-amber-500 to-yellow-500"
+                                : index === 1
+                                  ? "bg-gradient-to-r from-gray-500 to-gray-400"
+                                  : index === 2
+                                    ? "bg-gradient-to-r from-orange-500 to-red-500"
+                                    : "bg-gradient-to-r from-indigo-500 to-purple-500",
+                            )}
+                          >
                             {index + 1}
                           </div>
                           <div className="flex-1 min-w-0">
@@ -590,7 +603,7 @@ export default function DashboardPage() {
                           </div>
                         </div>
                         <Badge variant="secondary" className="backdrop-blur-sm bg-muted/50 whitespace-nowrap">
-                          {book.checkouts} borrow{book.checkouts !== 1 ? 's' : ''}
+                          {book.checkouts} borrow{book.checkouts !== 1 ? "s" : ""}
                         </Badge>
                       </div>
                     ))}
