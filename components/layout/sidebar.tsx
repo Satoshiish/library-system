@@ -5,18 +5,7 @@ import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
-import {
-  BookOpen,
-  LayoutDashboard,
-  Users,
-  UserPlus,
-  Plus,
-  Search,
-  LogOut,
-  Menu,
-  X,
-  BookCopy,
-} from "lucide-react"
+import { BookOpen, LayoutDashboard, Users, UserPlus, Plus, LogOut, Menu, X, BookCopy } from "lucide-react"
 
 const navigation = [
   { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
@@ -41,23 +30,24 @@ export function Sidebar() {
 
   return (
     <>
-      {/* Mobile toggle button */}
-      <div className="lg:hidden fixed top-4 left-4 z-50">
+      {/* Mobile toggle button - CHANGE: adjusted z-index and positioning */}
+      <div className="md:hidden fixed top-4 left-4 z-50">
         <Button
           variant="outline"
           size="icon"
-          className="backdrop-blur-md border-muted shadow-sm"
+          className="backdrop-blur-md border-muted shadow-sm bg-transparent"
           onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
         >
           {isMobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
         </Button>
       </div>
 
-      {/* Sidebar */}
+      {/* Sidebar - CHANGE: converted to drawer on mobile, fixed on desktop */}
       <div
         className={cn(
           "fixed inset-y-0 left-0 z-40 w-64 backdrop-blur-xl border-r border-border/30 bg-gradient-to-b from-sidebar/70 to-sidebar/40 text-sidebar-foreground shadow-xl transform transition-all duration-300 ease-in-out",
-          isMobileMenuOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
+          "md:translate-x-0 md:relative md:inset-auto md:z-0",
+          isMobileMenuOpen ? "translate-x-0" : "-translate-x-full",
         )}
       >
         <div className="flex flex-col h-full">
@@ -75,8 +65,7 @@ export function Sidebar() {
           {/* Navigation */}
           <nav className="flex-1 p-4 space-y-1 mt-2">
             {navigation.map((item) => {
-              const isActive =
-                pathname === item.href || pathname.startsWith(`${item.href}/`)
+              const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`)
               return (
                 <Link
                   key={item.name}
@@ -86,13 +75,13 @@ export function Sidebar() {
                     "group flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 relative",
                     isActive
                       ? "bg-gradient-to-r from-indigo-500/90 to-purple-500/80 text-white shadow-md"
-                      : "hover:bg-muted/60 hover:text-foreground text-muted-foreground"
+                      : "hover:bg-muted/60 hover:text-foreground text-muted-foreground",
                   )}
                 >
                   <div
                     className={cn(
                       "absolute left-0 top-0 h-full w-1 rounded-r-lg transition-all",
-                      isActive ? "bg-indigo-400" : "group-hover:bg-indigo-300/60"
+                      isActive ? "bg-indigo-400" : "group-hover:bg-indigo-300/60",
                     )}
                   />
                   <item.icon className="h-4 w-4 shrink-0" />
@@ -116,12 +105,9 @@ export function Sidebar() {
         </div>
       </div>
 
-      {/* Mobile Overlay */}
+      {/* Mobile Overlay - CHANGE: only show on mobile when menu is open */}
       {isMobileMenuOpen && (
-        <div
-          className="fixed inset-0 bg-black/40 backdrop-blur-sm z-30 lg:hidden"
-          onClick={closeMenu}
-        />
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-30 md:hidden" onClick={closeMenu} />
       )}
     </>
   )
