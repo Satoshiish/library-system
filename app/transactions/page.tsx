@@ -317,26 +317,31 @@ export default function TransactionsPage() {
   }
 
   // Function to calculate days overdue
-  const getDaysOverdue = (transaction: Transaction): number => {
-    if (!isOverdue(transaction)) return 0
-    
-    const dueDate = new Date(transaction.due_date)
-    const today = new Date()
-    
-    const diffTime = today.getTime() - dueDate.getTime()
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
-    
-    return Math.max(0, diffDays)
-  }
+  // Function to calculate days overdue - FIXED: Accurate day calculation
+const getDaysOverdue = (transaction: Transaction): number => {
+  if (!isOverdue(transaction)) return 0
+  
+  const dueDate = new Date(transaction.due_date)
+  const today = new Date()
+  
+  // Set both dates to start of day for accurate comparison
+  dueDate.setHours(0, 0, 0, 0)
+  today.setHours(0, 0, 0, 0)
+  
+  const diffTime = today.getTime() - dueDate.getTime()
+  const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24))
+  
+  return Math.max(0, diffDays)
+}
 
-  // Function to get overdue status text
-  const getOverdueStatus = (transaction: Transaction): string => {
-    if (!isOverdue(transaction)) return ""
-    
-    const daysOverdue = getDaysOverdue(transaction)
-    if (daysOverdue === 1) return "1 day overdue"
-    return `${daysOverdue} days overdue`
-  }
+// Function to get overdue status text
+const getOverdueStatus = (transaction: Transaction): string => {
+  if (!isOverdue(transaction)) return ""
+  
+  const daysOverdue = getDaysOverdue(transaction)
+  if (daysOverdue === 1) return "1 day overdue"
+  return `${daysOverdue} days overdue`
+}
 
   // Function to get overdue badge variant based on severity
   const getOverdueSeverity = (transaction: Transaction): "warning" | "destructive" => {
