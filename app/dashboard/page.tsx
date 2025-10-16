@@ -20,7 +20,7 @@ export default function DashboardPage() {
   const [dashboardStats, setDashboardStats] = useState({
     totalBooks: 0,
     availableBooks: 0,
-    checkedOutBooks: 0,
+    borrowedBooks: 0, // Changed from checkedOutBooks
     reservedBooks: 0,
     totalBorrowers: 0,
     overdueBooks: 0,
@@ -31,241 +31,240 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-  const fetchDashboardData = async () => {
-    setLoading(true)
-    try {
-      console.log("🔄 Starting dashboard data fetch...")
+    const fetchDashboardData = async () => {
+      setLoading(true)
+      try {
+        console.log("🔄 Starting dashboard data fetch...")
 
-      // Fetch books
-      const { data: booksData, error: booksError } = await supabase
-        .from("books")
-        .select("*")
-      if (booksError) console.error("❌ Books fetch error:", booksError)
-      else console.log("✅ Books data:", booksData?.length)
-
-      // Fetch patrons FIRST to ensure we have the data
-      const { data: patronsData, error: patronsError } = await supabase
-        .from("patrons")
-        .select("*")
-      if (patronsError) console.error("❌ Patrons fetch error:", patronsError)
-      else console.log("✅ Patrons data:", patronsData?.length)
-
-      // Create patron map for quick lookup
-      const patronMap = new Map(patronsData?.map(p => [p.id, p]) || [])
-      console.log("🗺️ Patron map created with", patronMap.size, "entries")
-
-      // ✅ FIXED: Try different query approaches for loans
-      let loansData: any[] = []
-      let loansError: any = null
-
-      // Approach 1: Try with joins first
-      const { data: loansData1, error: error1 } = await supabase
-        .from("loans")
-        .select(`
-          *,
-          patrons (*),
-          books (*)
-        `)
-        .order("created_at", { ascending: false })
-
-      if (!error1 && loansData1 && loansData1.length > 0) {
-        console.log("✅ Approach 1 - Joined loans data:", loansData1.length)
-        loansData = loansData1
-        
-        // Debug: Check if patron data is included
-        if (loansData1[0]?.patrons) {
-          console.log("🔍 First loan patron data:", loansData1[0].patrons)
-        } else {
-          console.log("⚠️ No patron data in joined query")
-        }
-      } else {
-        console.log("❌ Approach 1 failed:", error1)
-        
-        // Approach 2: Basic loans query as fallback
-        const { data: loansData2, error: error2 } = await supabase
-          .from("loans")
+        // Fetch books
+        const { data: booksData, error: booksError } = await supabase
+          .from("books")
           .select("*")
+        if (booksError) console.error("❌ Books fetch error:", booksError)
+        else console.log("✅ Books data:", booksData?.length)
+
+        // Fetch patrons FIRST to ensure we have the data
+        const { data: patronsData, error: patronsError } = await supabase
+          .from("patrons")
+          .select("*")
+        if (patronsError) console.error("❌ Patrons fetch error:", patronsError)
+        else console.log("✅ Patrons data:", patronsData?.length)
+
+        // Create patron map for quick lookup
+        const patronMap = new Map(patronsData?.map(p => [p.id, p]) || [])
+        console.log("🗺️ Patron map created with", patronMap.size, "entries")
+
+        // ✅ FIXED: Try different query approaches for loans
+        let loansData: any[] = []
+        let loansError: any = null
+
+        // Approach 1: Try with joins first
+        const { data: loansData1, error: error1 } = await supabase
+          .from("loans")
+          .select(`
+            *,
+            patrons (*),
+            books (*)
+          `)
           .order("created_at", { ascending: false })
 
-        if (!error2 && loansData2) {
-          console.log("✅ Approach 2 - Basic loans data:", loansData2.length)
-          loansData = loansData2
-        } else {
-          console.log("❌ Approach 2 failed:", error2)
-        }
-      }
-
-      // 🧩 Create book map for quick lookup
-      const bookMap = new Map(booksData?.map(b => [b.id, b]) || [])
-
-      // If we have loans but no joined data, manually attach book/patron details
-      loansData = loansData.map(loan => {
-        const patronFromMap = patronMap.get(loan.patron_id)
-        const bookFromMap = bookMap.get(loan.book_id)
-        
-        console.log(`🔍 Loan ${loan.id}:`, {
-          patron_id: loan.patron_id,
-          hasJoinedPatron: !!loan.patrons,
-          hasMappedPatron: !!patronFromMap,
-          patronName: patronFromMap?.full_name || 'No name found'
-        })
-
-        return {
-          ...loan,
-          books: loan.books || bookFromMap || null,
-          patrons: loan.patrons || patronFromMap || null,
-        }
-      })
-
-      // 📊 Calculate stats
-      const totalBooks = booksData?.length || 0
-      const availableBooks = booksData?.filter(b => b.status === "available").length || 0
-      const checkedOutBooks = booksData?.filter(b => b.status === "checked_out").length || 0
-      const reservedBooks = booksData?.filter(b => b.status === "reserved").length || 0
-      const totalBorrowers = patronsData?.length || 0
-
-      // ✅ Overdue calculation
-      const today = new Date()
-      today.setHours(0, 0, 0, 0)
-
-      const overdueLoans = loansData.filter(loan => {
-        if (loan.status === "returned" || loan.returned_date) return false
-
-        let dueDate: Date | null = null
-        if (loan.due_date) dueDate = new Date(loan.due_date)
-        else if (loan.doc_date) dueDate = new Date(loan.doc_date)
-        else if (loan.created_at) {
-          dueDate = new Date(loan.created_at)
-          dueDate.setDate(dueDate.getDate() + 14)
-        }
-
-        if (!dueDate || isNaN(dueDate.getTime())) return false
-        dueDate.setHours(0, 0, 0, 0)
-        return dueDate < today
-      })
-
-      const overdueBooksCount = overdueLoans.length
-
-      // Update stats
-      setDashboardStats({
-        totalBooks,
-        availableBooks,
-        checkedOutBooks,
-        reservedBooks,
-        totalBorrowers,
-        overdueBooks: overdueBooksCount,
-      })
-
-      // ✅ Recent activity - IMPROVED patron name resolution
-      const recentActivityData = loansData.slice(0, 5).map(loan => {
-        // Get patron name with multiple fallbacks
-        let borrowerName = `Patron ${loan.patron_id}`;
-        
-        // Try joined patron data first
-        if (loan.patrons?.full_name) {
-          borrowerName = loan.patrons.full_name;
-          console.log(`✅ Using joined patron data for ${loan.patron_id}: ${borrowerName}`)
-        } 
-        // Fallback to patron map
-        else {
-          const patron = patronMap.get(loan.patron_id);
-          if (patron?.full_name) {
-            borrowerName = patron.full_name;
-            console.log(`✅ Using mapped patron data for ${loan.patron_id}: ${borrowerName}`)
+        if (!error1 && loansData1 && loansData1.length > 0) {
+          console.log("✅ Approach 1 - Joined loans data:", loansData1.length)
+          loansData = loansData1
+          
+          // Debug: Check if patron data is included
+          if (loansData1[0]?.patrons) {
+            console.log("🔍 First loan patron data:", loansData1[0].patrons)
           } else {
-            console.log(`❌ No patron name found for ${loan.patron_id}`)
+            console.log("⚠️ No patron data in joined query")
           }
-        }
-
-        return {
-          id: loan.id,
-          title: loan.books?.title || `Book ${loan.book_id}`,
-          author: loan.books?.author || "Unknown Author",
-          borrowerName: borrowerName,
-          status: loan.status,
-          created_at: loan.created_at,
-          returned_date: loan.returned_date,
-        }
-      })
-      setRecentActivity(recentActivityData)
-
-      // Popular books
-      const checkoutCounts: Record<string, number> = {}
-      loansData.forEach(loan => {
-        if (loan.book_id) {
-          checkoutCounts[loan.book_id] = (checkoutCounts[loan.book_id] || 0) + 1
-        }
-      })
-      const popularBooksList = Object.entries(checkoutCounts)
-        .map(([book_id, count]) => {
-          const book = booksData?.find(b => b.id === book_id)
-          if (!book) return null
-          return { id: book_id, title: book.title, author: book.author, checkouts: count }
-        })
-        .filter(Boolean)
-        .sort((a: any, b: any) => b.checkouts - a.checkouts)
-        .slice(0, 5)
-      setPopularBooks(popularBooksList)
-
-      // ✅ Overdue books - IMPROVED patron name resolution
-      const overdueBooksList = overdueLoans.map(loan => {
-        const dueDate = loan.due_date
-          ? new Date(loan.due_date)
-          : loan.doc_date
-          ? new Date(loan.doc_date)
-          : new Date(loan.created_at)
-        if (!loan.doc_date && !loan.due_date) dueDate.setDate(dueDate.getDate() + 14)
-
-        const daysOverdue = Math.max(
-          0,
-          Math.ceil((today.getTime() - dueDate.getTime()) / (1000 * 60 * 60 * 24))
-        )
-
-        // Get patron name with multiple fallbacks
-        let borrowerName = `Patron ${loan.patron_id}`;
-        
-        if (loan.patrons?.full_name) {
-          borrowerName = loan.patrons.full_name;
         } else {
-          const patron = patronMap.get(loan.patron_id);
-          if (patron?.full_name) {
-            borrowerName = patron.full_name;
+          console.log("❌ Approach 1 failed:", error1)
+          
+          // Approach 2: Basic loans query as fallback
+          const { data: loansData2, error: error2 } = await supabase
+            .from("loans")
+            .select("*")
+            .order("created_at", { ascending: false })
+
+          if (!error2 && loansData2) {
+            console.log("✅ Approach 2 - Basic loans data:", loansData2.length)
+            loansData = loansData2
+          } else {
+            console.log("❌ Approach 2 failed:", error2)
           }
         }
 
-        return {
-          id: loan.id,
-          title: loan.books?.title || `Book ${loan.book_id}`,
-          author: loan.books?.author || "Unknown Author",
-          borrower: borrowerName,
-          dueDate: dueDate.toISOString(),
-          daysOverdue,
-        }
-      })
-      setOverdueBooks(overdueBooksList)
+        // 🧩 Create book map for quick lookup
+        const bookMap = new Map(booksData?.map(b => [b.id, b]) || [])
 
-      // Debug log to verify patron names are working
-      console.log("🔍 FINAL Patron name resolution check:", {
-        totalLoans: loansData.length,
-        totalPatrons: patronsData?.length,
-        patronMapSize: patronMap.size,
-        sampleRecentActivity: recentActivityData[0] ? {
-          loanId: recentActivityData[0].id,
-          borrowerName: recentActivityData[0].borrowerName,
-          hasProperName: !recentActivityData[0].borrowerName.includes('Patron ')
-        } : 'No recent activity'
-      })
+        // If we have loans but no joined data, manually attach book/patron details
+        loansData = loansData.map(loan => {
+          const patronFromMap = patronMap.get(loan.patron_id)
+          const bookFromMap = bookMap.get(loan.book_id)
+          
+          console.log(`🔍 Loan ${loan.id}:`, {
+            patron_id: loan.patron_id,
+            hasJoinedPatron: !!loan.patrons,
+            hasMappedPatron: !!patronFromMap,
+            patronName: patronFromMap?.full_name || 'No name found'
+          })
 
-    } catch (err) {
-      console.error("❌ Error fetching dashboard data:", err)
-    } finally {
-      setLoading(false)
+          return {
+            ...loan,
+            books: loan.books || bookFromMap || null,
+            patrons: loan.patrons || patronFromMap || null,
+          }
+        })
+
+        // 📊 Calculate stats - UPDATED to use "borrowed" status
+        const totalBooks = booksData?.length || 0
+        const availableBooks = booksData?.filter(b => b.status === "available").length || 0
+        const borrowedBooks = booksData?.filter(b => b.status === "borrowed").length || 0 // Updated
+        const reservedBooks = booksData?.filter(b => b.status === "reserved").length || 0
+        const totalBorrowers = patronsData?.length || 0
+
+        // ✅ Overdue calculation
+        const today = new Date()
+        today.setHours(0, 0, 0, 0)
+
+        const overdueLoans = loansData.filter(loan => {
+          if (loan.status === "returned" || loan.returned_date) return false
+
+          let dueDate: Date | null = null
+          if (loan.due_date) dueDate = new Date(loan.due_date)
+          else if (loan.doc_date) dueDate = new Date(loan.doc_date)
+          else if (loan.created_at) {
+            dueDate = new Date(loan.created_at)
+            dueDate.setDate(dueDate.getDate() + 14)
+          }
+
+          if (!dueDate || isNaN(dueDate.getTime())) return false
+          dueDate.setHours(0, 0, 0, 0)
+          return dueDate < today
+        })
+
+        const overdueBooksCount = overdueLoans.length
+
+        // Update stats - UPDATED to use borrowedBooks
+        setDashboardStats({
+          totalBooks,
+          availableBooks,
+          borrowedBooks, // Updated
+          reservedBooks,
+          totalBorrowers,
+          overdueBooks: overdueBooksCount,
+        })
+
+        // ✅ Recent activity - IMPROVED patron name resolution
+        const recentActivityData = loansData.slice(0, 5).map(loan => {
+          // Get patron name with multiple fallbacks
+          let borrowerName = `Patron ${loan.patron_id}`;
+          
+          // Try joined patron data first
+          if (loan.patrons?.full_name) {
+            borrowerName = loan.patrons.full_name;
+            console.log(`✅ Using joined patron data for ${loan.patron_id}: ${borrowerName}`)
+          } 
+          // Fallback to patron map
+          else {
+            const patron = patronMap.get(loan.patron_id);
+            if (patron?.full_name) {
+              borrowerName = patron.full_name;
+              console.log(`✅ Using mapped patron data for ${loan.patron_id}: ${borrowerName}`)
+            } else {
+              console.log(`❌ No patron name found for ${loan.patron_id}`)
+            }
+          }
+
+          return {
+            id: loan.id,
+            title: loan.books?.title || `Book ${loan.book_id}`,
+            author: loan.books?.author || "Unknown Author",
+            borrowerName: borrowerName,
+            status: loan.status,
+            created_at: loan.created_at,
+            returned_date: loan.returned_date,
+          }
+        })
+        setRecentActivity(recentActivityData)
+
+        // Popular books
+        const checkoutCounts: Record<string, number> = {}
+        loansData.forEach(loan => {
+          if (loan.book_id) {
+            checkoutCounts[loan.book_id] = (checkoutCounts[loan.book_id] || 0) + 1
+          }
+        })
+        const popularBooksList = Object.entries(checkoutCounts)
+          .map(([book_id, count]) => {
+            const book = booksData?.find(b => b.id === book_id)
+            if (!book) return null
+            return { id: book_id, title: book.title, author: book.author, checkouts: count }
+          })
+          .filter(Boolean)
+          .sort((a: any, b: any) => b.checkouts - a.checkouts)
+          .slice(0, 5)
+        setPopularBooks(popularBooksList)
+
+        // ✅ Overdue books - IMPROVED patron name resolution
+        const overdueBooksList = overdueLoans.map(loan => {
+          const dueDate = loan.due_date
+            ? new Date(loan.due_date)
+            : loan.doc_date
+            ? new Date(loan.doc_date)
+            : new Date(loan.created_at)
+          if (!loan.doc_date && !loan.due_date) dueDate.setDate(dueDate.getDate() + 14)
+
+          const daysOverdue = Math.max(
+            0,
+            Math.ceil((today.getTime() - dueDate.getTime()) / (1000 * 60 * 60 * 24))
+          )
+
+          // Get patron name with multiple fallbacks
+          let borrowerName = `Patron ${loan.patron_id}`;
+          
+          if (loan.patrons?.full_name) {
+            borrowerName = loan.patrons.full_name;
+          } else {
+            const patron = patronMap.get(loan.patron_id);
+            if (patron?.full_name) {
+              borrowerName = patron.full_name;
+            }
+          }
+
+          return {
+            id: loan.id,
+            title: loan.books?.title || `Book ${loan.book_id}`,
+            author: loan.books?.author || "Unknown Author",
+            borrower: borrowerName,
+            dueDate: dueDate.toISOString(),
+            daysOverdue,
+          }
+        })
+        setOverdueBooks(overdueBooksList)
+
+        // Debug log to verify patron names are working
+        console.log("🔍 FINAL Patron name resolution check:", {
+          totalLoans: loansData.length,
+          totalPatrons: patronsData?.length,
+          patronMapSize: patronMap.size,
+          sampleRecentActivity: recentActivityData[0] ? {
+            loanId: recentActivityData[0].id,
+            borrowerName: recentActivityData[0].borrowerName,
+            hasProperName: !recentActivityData[0].borrowerName.includes('Patron ')
+          } : 'No recent activity'
+        })
+
+      } catch (err) {
+        console.error("❌ Error fetching dashboard data:", err)
+      } finally {
+        setLoading(false)
+      }
     }
-  }
 
-  fetchDashboardData()
-}, [])
-
+    fetchDashboardData()
+  }, [])
 
   if (loading) {
     return (
@@ -350,18 +349,19 @@ export default function DashboardPage() {
                 </CardContent>
               </Card>
 
+              {/* UPDATED: Changed from "Checked Out" to "Borrowed" */}
               <Card className="backdrop-blur-xl border-border/30 bg-gradient-to-b from-background/95 to-background/90 shadow-lg shadow-indigo-500/10">
                 <CardHeader className="flex flex-row items-center justify-between pb-2">
-                  <CardTitle className="text-sm font-medium text-foreground/80">Checked Out</CardTitle>
+                  <CardTitle className="text-sm font-medium text-foreground/80">Borrowed</CardTitle>
                   <div className="p-2 rounded-lg bg-gradient-to-tr from-blue-500/20 to-cyan-500/20">
                     <User className="h-4 w-4 text-blue-600" />
                   </div>
                 </CardHeader>
                 <CardContent>
-                  <div className="text-2xl font-bold text-foreground">{dashboardStats.checkedOutBooks}</div>
+                  <div className="text-2xl font-bold text-foreground">{dashboardStats.borrowedBooks}</div>
                   <p className="text-xs text-muted-foreground">
                     {dashboardStats.totalBooks > 0
-                      ? ((dashboardStats.checkedOutBooks / dashboardStats.totalBooks) * 100).toFixed(1) + "% of total"
+                      ? ((dashboardStats.borrowedBooks / dashboardStats.totalBooks) * 100).toFixed(1) + "% of total"
                       : "0%"}
                   </p>
                 </CardContent>
@@ -445,7 +445,7 @@ export default function DashboardPage() {
                 <CardContent>
                   <div className="space-y-3">
                     {overdueBooks.map(book => (
-                      <div key={book.loanId} className="flex items-center justify-between p-4 bg-destructive/10 rounded-lg backdrop-blur-sm border border-destructive/20">
+                      <div key={book.id} className="flex items-center justify-between p-4 bg-destructive/10 rounded-lg backdrop-blur-sm border border-destructive/20">
                         <div className="flex-1">
                           <p className="font-medium">{book.title}</p>
                           <p className="text-sm text-muted-foreground">
@@ -507,7 +507,7 @@ export default function DashboardPage() {
                 <CardContent>
                   <div className="space-y-4">
                     {recentActivity.map(activity => {
-                      // Determine action type and styling based on status
+                      // UPDATED: Action types to match "borrowed" terminology
                       const getActionInfo = () => {
                         switch (activity.status) {
                           case "returned":
@@ -516,10 +516,10 @@ export default function DashboardPage() {
                               color: "bg-gradient-to-r from-green-500 to-emerald-500",
                               textColor: "text-green-600"
                             }
-                          case "borrowed":
+                          case "borrowed": // Updated from "checked_out"
                           case "active":
                             return {
-                              action: "Checked Out",
+                              action: "Borrowed", // Updated from "Checked Out"
                               color: "bg-gradient-to-r from-blue-500 to-cyan-500",
                               textColor: "text-blue-600"
                             }
@@ -602,7 +602,7 @@ export default function DashboardPage() {
                   <CardTitle className="bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">
                     Popular Books
                   </CardTitle>
-                  <CardDescription>Most frequently checked out books</CardDescription>
+                  <CardDescription>Most frequently borrowed books</CardDescription> {/* Updated description */}
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-4">
@@ -624,7 +624,7 @@ export default function DashboardPage() {
                           </div>
                         </div>
                         <Badge variant="secondary" className="backdrop-blur-sm bg-muted/50 whitespace-nowrap">
-                          {book.checkouts} checkout{book.checkouts !== 1 ? 's' : ''}
+                          {book.checkouts} borrow{book.checkouts !== 1 ? 's' : ''} {/* Updated text */}
                         </Badge>
                       </div>
                     ))}
@@ -634,7 +634,7 @@ export default function DashboardPage() {
                           <TrendingUp className="h-6 w-6 text-muted-foreground" />
                         </div>
                         <p className="text-muted-foreground font-medium">No popular books data</p>
-                        <p className="text-sm text-muted-foreground mt-1">Checkout data will appear here</p>
+                        <p className="text-sm text-muted-foreground mt-1">Borrowing data will appear here</p> {/* Updated text */}
                       </div>
                     )}
                   </div>
