@@ -6,7 +6,7 @@ import { Sidebar } from "@/components/layout/sidebar"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { BookOpen, User, TrendingUp, Plus, Eye, Loader2, ArrowUpRight, Users, BookCopy, AlertTriangle, Menu, X } from "lucide-react"
+import { BookOpen, User, TrendingUp, Plus, Eye, Loader2, ArrowUpRight, Users, BookCopy, AlertTriangle } from "lucide-react"
 import Link from "next/link"
 import { createClient } from "@supabase/supabase-js"
 import { cn } from "@/lib/utils"
@@ -29,7 +29,6 @@ export default function DashboardPage() {
   const [popularBooks, setPopularBooks] = useState<any[]>([])
   const [overdueBooks, setOverdueBooks] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
-  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   useEffect(() => {
     const fetchDashboardData = async () => {
@@ -282,57 +281,30 @@ export default function DashboardPage() {
     <AuthGuard>
       <div className="flex min-h-screen bg-gradient-to-br from-slate-50 via-blue-50/30 to-indigo-100/50">
         <Sidebar />
-        
-        {/* Mobile Sidebar Overlay */}
-        {sidebarOpen && (
-          <div 
-            className="fixed inset-0 bg-black/50 z-40 lg:hidden"
-            onClick={() => setSidebarOpen(false)}
-          />
-        )}
-        
-        {/* Mobile Sidebar */}
-        <div className={cn(
-          "fixed inset-y-0 left-0 z-50 w-64 transform transition-transform duration-300 ease-in-out lg:translate-x-0 lg:static lg:z-auto",
-          sidebarOpen ? "translate-x-0" : "-translate-x-full"
-        )}>
-          <Sidebar />
-        </div>
-
-        <main className="flex-1 lg:ml-64 p-4 sm:p-6 w-full">
-          <div className="max-w-7xl mx-auto space-y-4 sm:space-y-6">
+        <main className="flex-1 lg:ml-64 p-6">
+          <div className="max-w-7xl mx-auto space-y-6">
             {/* Header */}
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4">
-              <div className="flex items-center gap-3">
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="lg:hidden"
-                  onClick={() => setSidebarOpen(!sidebarOpen)}
-                >
-                  {sidebarOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
-                </Button>
-                <div>
-                  <h1 className="text-2xl sm:text-3xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">
-                    Dashboard
-                  </h1>
-                  <p className="text-sm sm:text-base text-muted-foreground">Library inventory overview and statistics</p>
-                </div>
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+              <div>
+                <h1 className="text-3xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">
+                  Dashboard
+                </h1>
+                <p className="text-muted-foreground">Library inventory overview and statistics</p>
               </div>
-              <div className="flex flex-col xs:flex-row gap-2 w-full xs:w-auto">
-                <Link href="/books/add" className="w-full xs:w-auto">
+              <div className="flex gap-2">
+                <Link href="/books/add">
                   <Button className={cn(
-                    "w-full xs:w-auto bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700",
+                    "bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700",
                     "text-white shadow-lg shadow-indigo-500/25 hover:shadow-indigo-500/40",
                     "transition-all duration-300 transform hover:scale-[1.02]",
-                    "border-0 backdrop-blur-sm text-sm sm:text-base"
+                    "border-0 backdrop-blur-sm"
                   )}>
                     <Plus className="mr-2 h-4 w-4" />
                     Add Book
                   </Button>
                 </Link>
-                <Link href="/transactions" className="w-full xs:w-auto">
-                  <Button variant="outline" className="w-full xs:w-auto backdrop-blur-sm border-border/50 text-sm sm:text-base">
+                <Link href="/transactions">
+                  <Button variant="outline" className="backdrop-blur-sm border-border/50">
                     <Eye className="mr-2 h-4 w-4" />
                     View Transactions
                   </Button>
@@ -340,19 +312,18 @@ export default function DashboardPage() {
               </div>
             </div>
 
-            {/* Stats Cards Grid */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3 sm:gap-4 lg:gap-6">
-              {/* Total Books Card */}
+            {/* Stats Cards - REMOVED Overdue card from top row */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               <Card className="backdrop-blur-xl border-border/30 bg-gradient-to-b from-background/95 to-background/90 shadow-lg shadow-indigo-500/10">
-                <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
+                <CardHeader className="flex flex-row items-center justify-between pb-2">
                   <CardTitle className="text-sm font-medium text-foreground/80">Total Books</CardTitle>
                   <div className="p-2 rounded-lg bg-gradient-to-tr from-indigo-500/20 to-purple-500/20">
                     <BookOpen className="h-4 w-4 text-indigo-600" />
                   </div>
                 </CardHeader>
                 <CardContent>
-                  <div className="text-xl sm:text-2xl font-bold text-foreground">{dashboardStats.totalBooks}</div>
-                  <p className="text-xs text-muted-foreground flex items-center gap-1 mt-1">
+                  <div className="text-2xl font-bold text-foreground">{dashboardStats.totalBooks}</div>
+                  <p className="text-xs text-muted-foreground flex items-center gap-1">
                     <ArrowUpRight className="h-3 w-3 text-green-600" />
                     <span className="text-green-600">
                       +{dashboardStats.availableBooks} available
@@ -361,16 +332,15 @@ export default function DashboardPage() {
                 </CardContent>
               </Card>
 
-              {/* Available Books Card */}
               <Card className="backdrop-blur-xl border-border/30 bg-gradient-to-b from-background/95 to-background/90 shadow-lg shadow-indigo-500/10">
-                <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
+                <CardHeader className="flex flex-row items-center justify-between pb-2">
                   <CardTitle className="text-sm font-medium text-foreground/80">Available</CardTitle>
                   <div className="p-2 rounded-lg bg-gradient-to-tr from-green-500/20 to-emerald-500/20">
                     <TrendingUp className="h-4 w-4 text-green-600" />
                   </div>
                 </CardHeader>
                 <CardContent>
-                  <div className="text-xl sm:text-2xl font-bold text-foreground">{dashboardStats.availableBooks}</div>
+                  <div className="text-2xl font-bold text-foreground">{dashboardStats.availableBooks}</div>
                   <p className="text-xs text-muted-foreground">
                     {dashboardStats.totalBooks > 0
                       ? ((dashboardStats.availableBooks / dashboardStats.totalBooks) * 100).toFixed(1) + "% of total"
@@ -379,16 +349,15 @@ export default function DashboardPage() {
                 </CardContent>
               </Card>
 
-              {/* Borrowed Books Card */}
               <Card className="backdrop-blur-xl border-border/30 bg-gradient-to-b from-background/95 to-background/90 shadow-lg shadow-indigo-500/10">
-                <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
+                <CardHeader className="flex flex-row items-center justify-between pb-2">
                   <CardTitle className="text-sm font-medium text-foreground/80">Borrowed</CardTitle>
                   <div className="p-2 rounded-lg bg-gradient-to-tr from-blue-500/20 to-cyan-500/20">
                     <User className="h-4 w-4 text-blue-600" />
                   </div>
                 </CardHeader>
                 <CardContent>
-                  <div className="text-xl sm:text-2xl font-bold text-foreground">{dashboardStats.borrowedBooks}</div>
+                  <div className="text-2xl font-bold text-foreground">{dashboardStats.borrowedBooks}</div>
                   <p className="text-xs text-muted-foreground">
                     {dashboardStats.totalBooks > 0
                       ? ((dashboardStats.borrowedBooks / dashboardStats.totalBooks) * 100).toFixed(1) + "% of total"
@@ -399,31 +368,29 @@ export default function DashboardPage() {
             </div>
 
             {/* Additional Stats Cards */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 lg:gap-6">
-              {/* Total Patrons Card */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <Card className="backdrop-blur-xl border-border/30 bg-gradient-to-b from-background/95 to-background/90 shadow-lg shadow-indigo-500/10">
-                <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
+                <CardHeader className="flex flex-row items-center justify-between pb-2">
                   <CardTitle className="text-sm font-medium text-foreground/80">Total Patrons</CardTitle>
                   <div className="p-2 rounded-lg bg-gradient-to-tr from-purple-500/20 to-pink-500/20">
                     <Users className="h-4 w-4 text-purple-600" />
                   </div>
                 </CardHeader>
                 <CardContent>
-                  <div className="text-xl sm:text-2xl font-bold text-foreground">{dashboardStats.totalBorrowers}</div>
+                  <div className="text-2xl font-bold text-foreground">{dashboardStats.totalBorrowers}</div>
                   <p className="text-xs text-muted-foreground">Active library members</p>
                 </CardContent>
               </Card>
 
-              {/* Reserved Books Card */}
               <Card className="backdrop-blur-xl border-border/30 bg-gradient-to-b from-background/95 to-background/90 shadow-lg shadow-indigo-500/10">
-                <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
+                <CardHeader className="flex flex-row items-center justify-between pb-2">
                   <CardTitle className="text-sm font-medium text-foreground/80">Reserved</CardTitle>
                   <div className="p-2 rounded-lg bg-gradient-to-tr from-amber-500/20 to-yellow-500/20">
                     <BookCopy className="h-4 w-4 text-amber-600" />
                   </div>
                 </CardHeader>
                 <CardContent>
-                  <div className="text-xl sm:text-2xl font-bold text-foreground">{dashboardStats.reservedBooks}</div>
+                  <div className="text-2xl font-bold text-foreground">{dashboardStats.reservedBooks}</div>
                   <p className="text-xs text-muted-foreground">Books on hold</p>
                 </CardContent>
               </Card>
@@ -432,30 +399,30 @@ export default function DashboardPage() {
             {/* Overdue Books Alert */}
             {overdueBooks.length > 0 && (
               <Card className="backdrop-blur-xl border-destructive/50 bg-gradient-to-b from-destructive/5 to-destructive/10 shadow-lg shadow-red-500/10">
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-destructive flex items-center gap-2 text-base sm:text-lg">
-                    <AlertTriangle className="h-4 w-4 sm:h-5 sm:w-5" />
+                <CardHeader>
+                  <CardTitle className="text-destructive flex items-center gap-2">
+                    <AlertTriangle className="h-5 w-5" />
                     Overdue Books - Requires Attention!
                   </CardTitle>
-                  <CardDescription className="text-sm">
+                  <CardDescription>
                     {overdueBooks.length} book{overdueBooks.length !== 1 ? 's' : ''} that need to be returned immediately
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-3">
-                    {overdueBooks.slice(0, 3).map(book => (
-                      <div key={book.id} className="flex flex-col sm:flex-row sm:items-center justify-between p-3 sm:p-4 bg-destructive/10 rounded-lg backdrop-blur-sm border border-destructive/20 gap-2">
-                        <div className="flex-1 min-w-0">
-                          <p className="font-medium text-sm sm:text-base truncate">{book.title}</p>
-                          <p className="text-xs text-muted-foreground truncate">
+                    {overdueBooks.map(book => (
+                      <div key={book.id} className="flex items-center justify-between p-4 bg-destructive/10 rounded-lg backdrop-blur-sm border border-destructive/20">
+                        <div className="flex-1">
+                          <p className="font-medium">{book.title}</p>
+                          <p className="text-sm text-muted-foreground">
                             by {book.author} • Borrowed by {book.borrower}
                           </p>
                         </div>
-                        <div className="text-right sm:text-left">
-                          <Badge variant="destructive" className="backdrop-blur-sm text-xs">
+                        <div className="text-right">
+                          <Badge variant="destructive" className="backdrop-blur-sm">
                             {book.daysOverdue} day{book.daysOverdue !== 1 ? 's' : ''} overdue
                           </Badge>
-                          <p className="text-xs text-muted-foreground mt-1 whitespace-nowrap">
+                          <p className="text-xs text-muted-foreground mt-1">
                             Due: {new Date(book.dueDate).toLocaleDateString()}
                           </p>
                         </div>
@@ -467,7 +434,7 @@ export default function DashboardPage() {
                       <Button 
                         variant="outline" 
                         size="sm" 
-                        className="w-full bg-transparent backdrop-blur-sm border-destructive/50 hover:bg-destructive/10 text-destructive text-sm"
+                        className="w-full bg-transparent backdrop-blur-sm border-destructive/50 hover:bg-destructive/10 text-destructive"
                       >
                         <Eye className="mr-2 h-4 w-4" />
                         View All Overdue Transactions
@@ -481,12 +448,12 @@ export default function DashboardPage() {
             {/* No Overdue Books Message */}
             {overdueBooks.length === 0 && dashboardStats.overdueBooks === 0 && (
               <Card className="backdrop-blur-xl border-green-200/50 bg-gradient-to-b from-green-50/10 to-green-50/5 shadow-lg shadow-green-500/10">
-                <CardHeader className="py-4">
-                  <CardTitle className="text-green-600 flex items-center gap-2 text-base sm:text-lg">
-                    <TrendingUp className="h-4 w-4 sm:h-5 sm:w-5" />
+                <CardHeader>
+                  <CardTitle className="text-green-600 flex items-center gap-2">
+                    <TrendingUp className="h-5 w-5" />
                     All Clear!
                   </CardTitle>
-                  <CardDescription className="text-sm">
+                  <CardDescription>
                     No overdue books. All items are returned on time or not yet due.
                   </CardDescription>
                 </CardHeader>
@@ -494,18 +461,19 @@ export default function DashboardPage() {
             )}
 
             {/* Recent Activity & Popular Books */}
-            <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 sm:gap-6">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               {/* Recent Activity */}
               <Card className="backdrop-blur-xl border-border/30 bg-gradient-to-b from-background/95 to-background/90 shadow-lg shadow-indigo-500/10">
-                <CardHeader className="pb-3">
-                  <CardTitle className="bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent text-lg sm:text-xl">
+                <CardHeader>
+                  <CardTitle className="bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">
                     Recent Activity
                   </CardTitle>
-                  <CardDescription className="text-sm">Latest library transactions and book movements</CardDescription>
+                  <CardDescription>Latest library transactions and book movements</CardDescription>
                 </CardHeader>
-                <CardContent className="pt-0">
-                  <div className="space-y-3">
+                <CardContent>
+                  <div className="space-y-4">
                     {recentActivity.map(activity => {
+                      // UPDATED: Action types to match "borrowed" terminology
                       const getActionInfo = () => {
                         switch (activity.status) {
                           case "returned":
@@ -570,12 +538,12 @@ export default function DashboardPage() {
                       )
                     })}
                     {recentActivity.length === 0 && (
-                      <div className="text-center py-6">
-                        <div className="w-10 h-10 sm:w-12 sm:h-12 bg-muted/30 rounded-full flex items-center justify-center mx-auto mb-3">
-                          <BookOpen className="h-5 w-5 sm:h-6 sm:w-6 text-muted-foreground" />
+                      <div className="text-center py-8">
+                        <div className="w-12 h-12 bg-muted/30 rounded-full flex items-center justify-center mx-auto mb-3">
+                          <BookOpen className="h-6 w-6 text-muted-foreground" />
                         </div>
-                        <p className="text-muted-foreground font-medium text-sm sm:text-base">No recent activity</p>
-                        <p className="text-xs text-muted-foreground mt-1">Library transactions will appear here</p>
+                        <p className="text-muted-foreground font-medium">No recent activity</p>
+                        <p className="text-sm text-muted-foreground mt-1">Library transactions will appear here</p>
                       </div>
                     )}
                   </div>
@@ -584,7 +552,7 @@ export default function DashboardPage() {
                       <Button 
                         variant="outline" 
                         size="sm" 
-                        className="w-full bg-transparent backdrop-blur-sm border-border/50 hover:bg-muted/30 hover:border-indigo-200 transition-colors text-sm"
+                        className="w-full bg-transparent backdrop-blur-sm border-border/50 hover:bg-muted/30 hover:border-indigo-200 transition-colors"
                       >
                         <Eye className="mr-2 h-4 w-4" />
                         View All Transactions
@@ -596,19 +564,19 @@ export default function DashboardPage() {
 
               {/* Popular Books */}
               <Card className="backdrop-blur-xl border-border/30 bg-gradient-to-b from-background/95 to-background/90 shadow-lg shadow-indigo-500/10">
-                <CardHeader className="pb-3">
-                  <CardTitle className="bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent text-lg sm:text-xl">
+                <CardHeader>
+                  <CardTitle className="bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">
                     Popular Books
                   </CardTitle>
-                  <CardDescription className="text-sm">Most frequently borrowed books</CardDescription>
+                  <CardDescription>Most frequently borrowed books</CardDescription>
                 </CardHeader>
-                <CardContent className="pt-0">
-                  <div className="space-y-3">
+                <CardContent>
+                  <div className="space-y-4">
                     {popularBooks.map((book, index) => (
                       <div key={book.id} className="flex items-center justify-between p-3 rounded-lg hover:bg-muted/30 transition-colors">
-                        <div className="flex items-center gap-3 flex-1 min-w-0">
+                        <div className="flex items-center gap-3">
                           <div className={cn(
-                            "flex items-center justify-center w-6 h-6 rounded-full text-xs font-bold text-white flex-shrink-0",
+                            "flex items-center justify-center w-6 h-6 rounded-full text-xs font-bold text-white",
                             index === 0 ? "bg-gradient-to-r from-amber-500 to-yellow-500" :
                             index === 1 ? "bg-gradient-to-r from-gray-500 to-gray-400" :
                             index === 2 ? "bg-gradient-to-r from-orange-500 to-red-500" :
@@ -621,18 +589,18 @@ export default function DashboardPage() {
                             <p className="text-xs text-muted-foreground truncate">{book.author}</p>
                           </div>
                         </div>
-                        <Badge variant="secondary" className="backdrop-blur-sm bg-muted/50 whitespace-nowrap flex-shrink-0 text-xs">
+                        <Badge variant="secondary" className="backdrop-blur-sm bg-muted/50 whitespace-nowrap">
                           {book.checkouts} borrow{book.checkouts !== 1 ? 's' : ''}
                         </Badge>
                       </div>
                     ))}
                     {popularBooks.length === 0 && (
-                      <div className="text-center py-6">
-                        <div className="w-10 h-10 sm:w-12 sm:h-12 bg-muted/30 rounded-full flex items-center justify-center mx-auto mb-3">
-                          <TrendingUp className="h-5 w-5 sm:h-6 sm:w-6 text-muted-foreground" />
+                      <div className="text-center py-8">
+                        <div className="w-12 h-12 bg-muted/30 rounded-full flex items-center justify-center mx-auto mb-3">
+                          <TrendingUp className="h-6 w-6 text-muted-foreground" />
                         </div>
-                        <p className="text-muted-foreground font-medium text-sm sm:text-base">No popular books data</p>
-                        <p className="text-xs text-muted-foreground mt-1">Borrowing data will appear here</p>
+                        <p className="text-muted-foreground font-medium">No popular books data</p>
+                        <p className="text-sm text-muted-foreground mt-1">Borrowing data will appear here</p>
                       </div>
                     )}
                   </div>
