@@ -567,219 +567,429 @@ export default function PatronPage() {
                   </p>
                 </Card>
               ) : (
-                <Card className="backdrop-blur-xl border-border/30 bg-gradient-to-b from-background/95 to-background/90 shadow-lg shadow-indigo-500/10 overflow-hidden">
-                  <CardHeader className="px-4 sm:px-6 pt-4 sm:pt-6 pb-2">
-                    <CardTitle className="bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent text-lg sm:text-xl">
-                      {showArchived ? "Archived Patrons" : "Active Patrons"} ({filteredPatrons.length})
-                    </CardTitle>
-                    {showArchived && (
-                      <CardDescription className="text-orange-600 flex items-center gap-2 text-xs sm:text-sm">
-                        <AlertTriangle className="h-4 w-4 flex-shrink-0" />
-                        Warning: Permanent deletion cannot be undone and will remove all patron data permanently.
-                      </CardDescription>
-                    )}
-                  </CardHeader>
-                  <CardContent className="p-0">
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-sm">
-                        <thead className="bg-muted/30 backdrop-blur-sm border-b border-border/30">
-                          <tr className="text-left">
-                            <th className="p-4 font-medium text-foreground/80 whitespace-nowrap">Full Name</th>
-                            <th className="p-4 font-medium text-foreground/80 whitespace-nowrap">Email</th>
-                            <th className="p-4 font-medium text-foreground/80 whitespace-nowrap">Phone</th>
-                            <th className="p-4 font-medium text-foreground/80 whitespace-nowrap">Member Since</th>
-                            <th className="p-4 font-medium text-foreground/80 whitespace-nowrap">Status</th>
-                            <th className="p-4 font-medium text-foreground/80 text-right whitespace-nowrap">Actions</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {filteredPatrons.map((p) => (
-                            <tr key={p.id} className="border-b border-border/30 hover:bg-muted/20 transition-colors">
-                              <td className="p-4">
-                                {editingPatron?.id === p.id ? (
-                                  <Input
-                                    value={editingPatron.full_name}
-                                    onChange={(e) => setEditingPatron({ ...editingPatron, full_name: e.target.value })}
-                                    className="bg-background/50 border-border/50 h-9 text-sm"
-                                  />
-                                ) : (
-                                  <div className="flex items-center gap-2 min-w-[120px]">
-                                    <User className="h-4 w-4 text-indigo-600 flex-shrink-0" />
-                                    <span className="truncate">{p.full_name}</span>
-                                  </div>
-                                )}
-                              </td>
-                              <td className="p-4">
-                                {editingPatron?.id === p.id ? (
-                                  <Input
-                                    value={editingPatron.email}
-                                    onChange={(e) => setEditingPatron({ ...editingPatron, email: e.target.value })}
-                                    className="bg-background/50 border-border/50 h-9 text-sm"
-                                  />
-                                ) : (
-                                  <div className="flex items-center gap-2 min-w-[150px]">
-                                    <Mail className="h-4 w-4 text-indigo-600 flex-shrink-0" />
-                                    <span className="truncate">{p.email}</span>
-                                  </div>
-                                )}
-                              </td>
-                              <td className="p-4">
-                                {editingPatron?.id === p.id ? (
-                                  <div className="space-y-1">
-                                    <Input
-                                      value={editingPatron.phone || ""}
-                                      onChange={(e) =>
-                                        setEditingPatron({ ...editingPatron, phone: handlePhoneInput(e.target.value) })
-                                      }
-                                      placeholder="09XXXXXXXXX"
-                                      className={cn(
-                                        "bg-background/50 border-border/50 h-9 text-sm",
-                                        editingPatron.phone &&
-                                          getDigitCount(editingPatron.phone) > 11 &&
-                                          "border-red-300",
-                                      )}
-                                      maxLength={15}
-                                    />
-                                    {editingPatron.phone && (
-                                      <div
-                                        className={cn(
-                                          "text-xs",
-                                          getDigitCount(editingPatron.phone) > 11
-                                            ? "text-red-600 font-medium"
-                                            : "text-muted-foreground",
-                                        )}
-                                      >
-                                        {getDigitCount(editingPatron.phone)}/11 digits
-                                      </div>
-                                    )}
-                                  </div>
-                                ) : (
-                                  <div className="flex items-center gap-2">
-                                    <Phone className="h-4 w-4 text-indigo-600 flex-shrink-0" />
-                                    <span className="truncate">{p.phone || "-"}</span>
-                                  </div>
-                                )}
-                              </td>
-                              <td className="p-4">
-                                <div className="flex items-center gap-2 whitespace-nowrap">
-                                  <Calendar className="h-4 w-4 text-indigo-600 flex-shrink-0" />
-                                  {new Date(p.member_since).toLocaleDateString()}
-                                </div>
-                              </td>
-                              <td className="p-4">
-                                {editingPatron?.id === p.id ? (
-                                  <Select
-                                    value={editingPatron.status}
-                                    onValueChange={(value: "active" | "inactive") =>
-                                      setEditingPatron({ ...editingPatron, status: value })
-                                    }
-                                  >
-                                    <SelectTrigger className="bg-background/50 border-border/50 h-9 w-32 text-sm">
-                                      <SelectValue />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                      <SelectItem value="active">Active</SelectItem>
-                                      <SelectItem value="inactive">Inactive</SelectItem>
-                                    </SelectContent>
-                                  </Select>
-                                ) : (
-                                  <Badge
+                <>
+                  {/* Mobile Card View */}
+                  <div className="md:hidden space-y-3">
+                    {filteredPatrons.map((p) => (
+                      <Card
+                        key={p.id}
+                        className="backdrop-blur-xl border-border/30 bg-gradient-to-b from-background/95 to-background/90 shadow-lg shadow-indigo-500/10"
+                      >
+                        <CardContent className="p-4 space-y-3">
+                          {editingPatron?.id === p.id ? (
+                            <>
+                              <div className="space-y-2">
+                                <Label className="text-xs font-medium text-foreground/80">Full Name</Label>
+                                <Input
+                                  value={editingPatron.full_name}
+                                  onChange={(e) => setEditingPatron({ ...editingPatron, full_name: e.target.value })}
+                                  className="bg-background/50 border-border/50 h-9 text-sm"
+                                />
+                              </div>
+                              <div className="space-y-2">
+                                <Label className="text-xs font-medium text-foreground/80">Email</Label>
+                                <Input
+                                  value={editingPatron.email}
+                                  onChange={(e) => setEditingPatron({ ...editingPatron, email: e.target.value })}
+                                  className="bg-background/50 border-border/50 h-9 text-sm"
+                                />
+                              </div>
+                              <div className="space-y-2">
+                                <Label className="text-xs font-medium text-foreground/80">Phone</Label>
+                                <Input
+                                  value={editingPatron.phone || ""}
+                                  onChange={(e) =>
+                                    setEditingPatron({ ...editingPatron, phone: handlePhoneInput(e.target.value) })
+                                  }
+                                  placeholder="09XXXXXXXXX"
+                                  className={cn(
+                                    "bg-background/50 border-border/50 h-9 text-sm",
+                                    editingPatron.phone && getDigitCount(editingPatron.phone) > 11 && "border-red-300",
+                                  )}
+                                  maxLength={15}
+                                />
+                                {editingPatron.phone && (
+                                  <div
                                     className={cn(
-                                      "backdrop-blur-sm border text-xs",
-                                      p.status === "active"
-                                        ? "bg-green-100 text-green-800 border-green-200"
-                                        : p.status === "inactive"
-                                          ? "bg-yellow-100 text-yellow-800 border-yellow-200"
-                                          : "bg-red-100 text-red-800 border-red-200",
+                                      "text-xs",
+                                      getDigitCount(editingPatron.phone) > 11
+                                        ? "text-red-600 font-medium"
+                                        : "text-muted-foreground",
                                     )}
                                   >
-                                    {p.status}
-                                  </Badge>
+                                    {getDigitCount(editingPatron.phone)}/11 digits
+                                  </div>
                                 )}
-                              </td>
-                              <td className="p-4">
-                                <div className="flex gap-2 justify-end flex-wrap">
-                                  {editingPatron?.id === p.id ? (
-                                    <>
-                                      <Button
-                                        size="sm"
-                                        onClick={handleSaveEdit}
-                                        disabled={
-                                          submitting || (editingPatron.phone && getDigitCount(editingPatron.phone) > 11)
-                                        }
-                                        className="bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white border-0 h-8 px-2 text-xs"
-                                      >
-                                        {submitting ? (
-                                          <Loader2 className="h-4 w-4 animate-spin" />
-                                        ) : (
-                                          <Save className="h-4 w-4" />
-                                        )}
-                                      </Button>
-                                      <Button
-                                        size="sm"
-                                        variant="outline"
-                                        onClick={() => setEditingPatron(null)}
-                                        className="backdrop-blur-sm border-border/50 h-8 px-2 text-xs"
-                                      >
-                                        <X className="h-4 w-4" />
-                                      </Button>
-                                    </>
+                              </div>
+                              <div className="space-y-2">
+                                <Label className="text-xs font-medium text-foreground/80">Status</Label>
+                                <Select
+                                  value={editingPatron.status}
+                                  onValueChange={(value: "active" | "inactive") =>
+                                    setEditingPatron({ ...editingPatron, status: value })
+                                  }
+                                >
+                                  <SelectTrigger className="bg-background/50 border-border/50 h-9 text-sm">
+                                    <SelectValue />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="active">Active</SelectItem>
+                                    <SelectItem value="inactive">Inactive</SelectItem>
+                                  </SelectContent>
+                                </Select>
+                              </div>
+                              <div className="flex gap-2 pt-2">
+                                <Button
+                                  size="sm"
+                                  onClick={handleSaveEdit}
+                                  disabled={
+                                    submitting || (editingPatron.phone && getDigitCount(editingPatron.phone) > 11)
+                                  }
+                                  className="flex-1 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white border-0 h-9 text-xs"
+                                >
+                                  {submitting ? (
+                                    <Loader2 className="h-4 w-4 animate-spin" />
                                   ) : (
                                     <>
-                                      {!showArchived && (
-                                        <>
-                                          <Button
-                                            size="sm"
-                                            variant="outline"
-                                            onClick={() => setEditingPatron(p)}
-                                            className="backdrop-blur-sm border-border/50 hover:bg-blue-50 hover:border-blue-200 h-8 px-2 text-xs"
-                                          >
-                                            <Edit className="h-4 w-4 text-blue-600" />
-                                          </Button>
-                                          <Button
-                                            size="sm"
-                                            variant="outline"
-                                            onClick={() => confirmArchive(p)}
-                                            className="backdrop-blur-sm border-border/50 hover:bg-orange-50 hover:border-orange-200 text-orange-600 h-8 px-2 text-xs"
-                                          >
-                                            <Archive className="h-4 w-4" />
-                                          </Button>
-                                        </>
-                                      )}
-                                      {showArchived && (
-                                        <>
-                                          <Button
-                                            size="sm"
-                                            variant="outline"
-                                            onClick={() => confirmRestore(p)}
-                                            className="backdrop-blur-sm border-border/50 hover:bg-green-50 hover:border-green-200 text-green-600 h-8 px-2 text-xs"
-                                            title="Restore to active status"
-                                          >
-                                            <RotateCcw className="h-4 w-4" />
-                                          </Button>
-                                          <Button
-                                            size="sm"
-                                            variant="outline"
-                                            onClick={() => confirmPermanentDelete(p)}
-                                            className="bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-700 hover:to-rose-700 text-white h-8 px-2 text-xs"
-                                            title="Permanently delete patron"
-                                          >
-                                            <Trash2 className="h-4 w-4 mr-2" />
-                                            Delete Permanently
-                                          </Button>
-                                        </>
-                                      )}
+                                      <Save className="h-4 w-4 mr-1" />
+                                      Save
                                     </>
                                   )}
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => setEditingPatron(null)}
+                                  className="flex-1 backdrop-blur-sm border-border/50 h-9 text-xs"
+                                >
+                                  <X className="h-4 w-4" />
+                                </Button>
+                              </div>
+                            </>
+                          ) : (
+                            <>
+                              <div className="flex items-start gap-3">
+                                <User className="h-5 w-5 text-indigo-600 flex-shrink-0 mt-0.5" />
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-xs font-medium text-foreground/60">Full Name</p>
+                                  <p className="text-sm font-semibold text-foreground break-words">{p.full_name}</p>
                                 </div>
-                              </td>
+                              </div>
+                              <div className="flex items-start gap-3">
+                                <Mail className="h-5 w-5 text-indigo-600 flex-shrink-0 mt-0.5" />
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-xs font-medium text-foreground/60">Email</p>
+                                  <p className="text-sm text-foreground break-words">{p.email}</p>
+                                </div>
+                              </div>
+                              {p.phone && (
+                                <div className="flex items-start gap-3">
+                                  <Phone className="h-5 w-5 text-indigo-600 flex-shrink-0 mt-0.5" />
+                                  <div className="flex-1 min-w-0">
+                                    <p className="text-xs font-medium text-foreground/60">Phone</p>
+                                    <p className="text-sm text-foreground">{p.phone}</p>
+                                  </div>
+                                </div>
+                              )}
+                              <div className="flex items-start gap-3">
+                                <Calendar className="h-5 w-5 text-indigo-600 flex-shrink-0 mt-0.5" />
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-xs font-medium text-foreground/60">Member Since</p>
+                                  <p className="text-sm text-foreground">
+                                    {new Date(p.member_since).toLocaleDateString()}
+                                  </p>
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-2 pt-2">
+                                <Badge
+                                  className={cn(
+                                    "backdrop-blur-sm border text-xs",
+                                    p.status === "active"
+                                      ? "bg-green-100 text-green-800 border-green-200"
+                                      : p.status === "inactive"
+                                        ? "bg-yellow-100 text-yellow-800 border-yellow-200"
+                                        : "bg-red-100 text-red-800 border-red-200",
+                                  )}
+                                >
+                                  {p.status}
+                                </Badge>
+                              </div>
+                              <div className="flex gap-2 pt-2 flex-wrap">
+                                {!showArchived && (
+                                  <>
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      onClick={() => setEditingPatron(p)}
+                                      className="flex-1 backdrop-blur-sm border-border/50 hover:bg-blue-50 hover:border-blue-200 h-9 text-xs"
+                                    >
+                                      <Edit className="h-4 w-4 text-blue-600 mr-1" />
+                                      Edit
+                                    </Button>
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      onClick={() => confirmArchive(p)}
+                                      className="flex-1 backdrop-blur-sm border-border/50 hover:bg-orange-50 hover:border-orange-200 text-orange-600 h-9 text-xs"
+                                    >
+                                      <Archive className="h-4 w-4 mr-1" />
+                                      Archive
+                                    </Button>
+                                  </>
+                                )}
+                                {showArchived && (
+                                  <>
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      onClick={() => confirmRestore(p)}
+                                      className="flex-1 backdrop-blur-sm border-border/50 hover:bg-green-50 hover:border-green-200 text-green-600 h-9 text-xs"
+                                    >
+                                      <RotateCcw className="h-4 w-4 mr-1" />
+                                      Restore
+                                    </Button>
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      onClick={() => confirmPermanentDelete(p)}
+                                      className="flex-1 bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-700 hover:to-rose-700 text-white h-9 text-xs"
+                                    >
+                                      <Trash2 className="h-4 w-4 mr-1" />
+                                      Delete
+                                    </Button>
+                                  </>
+                                )}
+                              </div>
+                            </>
+                          )}
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
+
+                  {/* Desktop Table View */}
+                  <Card className="hidden md:block backdrop-blur-xl border-border/30 bg-gradient-to-b from-background/95 to-background/90 shadow-lg shadow-indigo-500/10 overflow-hidden">
+                    <CardHeader className="px-4 sm:px-6 pt-4 sm:pt-6 pb-2">
+                      <CardTitle className="bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent text-lg sm:text-xl">
+                        {showArchived ? "Archived Patrons" : "Active Patrons"} ({filteredPatrons.length})
+                      </CardTitle>
+                      {showArchived && (
+                        <CardDescription className="text-orange-600 flex items-center gap-2 text-xs sm:text-sm">
+                          <AlertTriangle className="h-4 w-4 flex-shrink-0" />
+                          Warning: Permanent deletion cannot be undone and will remove all patron data permanently.
+                        </CardDescription>
+                      )}
+                    </CardHeader>
+                    <CardContent className="p-0">
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-sm">
+                          <thead className="bg-muted/30 backdrop-blur-sm border-b border-border/30">
+                            <tr className="text-left">
+                              <th className="p-4 font-medium text-foreground/80 whitespace-nowrap">Full Name</th>
+                              <th className="p-4 font-medium text-foreground/80 whitespace-nowrap">Email</th>
+                              <th className="p-4 font-medium text-foreground/80 whitespace-nowrap">Phone</th>
+                              <th className="p-4 font-medium text-foreground/80 whitespace-nowrap">Member Since</th>
+                              <th className="p-4 font-medium text-foreground/80 whitespace-nowrap">Status</th>
+                              <th className="p-4 font-medium text-foreground/80 text-right whitespace-nowrap">
+                                Actions
+                              </th>
                             </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  </CardContent>
-                </Card>
+                          </thead>
+                          <tbody>
+                            {filteredPatrons.map((p) => (
+                              <tr key={p.id} className="border-b border-border/30 hover:bg-muted/20 transition-colors">
+                                <td className="p-4">
+                                  {editingPatron?.id === p.id ? (
+                                    <Input
+                                      value={editingPatron.full_name}
+                                      onChange={(e) =>
+                                        setEditingPatron({ ...editingPatron, full_name: e.target.value })
+                                      }
+                                      className="bg-background/50 border-border/50 h-9 text-sm"
+                                    />
+                                  ) : (
+                                    <div className="flex items-center gap-2 min-w-[120px]">
+                                      <User className="h-4 w-4 text-indigo-600 flex-shrink-0" />
+                                      <span className="truncate">{p.full_name}</span>
+                                    </div>
+                                  )}
+                                </td>
+                                <td className="p-4">
+                                  {editingPatron?.id === p.id ? (
+                                    <Input
+                                      value={editingPatron.email}
+                                      onChange={(e) => setEditingPatron({ ...editingPatron, email: e.target.value })}
+                                      className="bg-background/50 border-border/50 h-9 text-sm"
+                                    />
+                                  ) : (
+                                    <div className="flex items-center gap-2 min-w-[150px]">
+                                      <Mail className="h-4 w-4 text-indigo-600 flex-shrink-0" />
+                                      <span className="truncate">{p.email}</span>
+                                    </div>
+                                  )}
+                                </td>
+                                <td className="p-4">
+                                  {editingPatron?.id === p.id ? (
+                                    <div className="space-y-1">
+                                      <Input
+                                        value={editingPatron.phone || ""}
+                                        onChange={(e) =>
+                                          setEditingPatron({
+                                            ...editingPatron,
+                                            phone: handlePhoneInput(e.target.value),
+                                          })
+                                        }
+                                        placeholder="09XXXXXXXXX"
+                                        className={cn(
+                                          "bg-background/50 border-border/50 h-9 text-sm",
+                                          editingPatron.phone &&
+                                            getDigitCount(editingPatron.phone) > 11 &&
+                                            "border-red-300",
+                                        )}
+                                        maxLength={15}
+                                      />
+                                      {editingPatron.phone && (
+                                        <div
+                                          className={cn(
+                                            "text-xs",
+                                            getDigitCount(editingPatron.phone) > 11
+                                              ? "text-red-600 font-medium"
+                                              : "text-muted-foreground",
+                                          )}
+                                        >
+                                          {getDigitCount(editingPatron.phone)}/11 digits
+                                        </div>
+                                      )}
+                                    </div>
+                                  ) : (
+                                    <div className="flex items-center gap-2">
+                                      <Phone className="h-4 w-4 text-indigo-600 flex-shrink-0" />
+                                      <span className="truncate">{p.phone || "-"}</span>
+                                    </div>
+                                  )}
+                                </td>
+                                <td className="p-4">
+                                  <div className="flex items-center gap-2 whitespace-nowrap">
+                                    <Calendar className="h-4 w-4 text-indigo-600 flex-shrink-0" />
+                                    {new Date(p.member_since).toLocaleDateString()}
+                                  </div>
+                                </td>
+                                <td className="p-4">
+                                  {editingPatron?.id === p.id ? (
+                                    <Select
+                                      value={editingPatron.status}
+                                      onValueChange={(value: "active" | "inactive") =>
+                                        setEditingPatron({ ...editingPatron, status: value })
+                                      }
+                                    >
+                                      <SelectTrigger className="bg-background/50 border-border/50 h-9 w-32 text-sm">
+                                        <SelectValue />
+                                      </SelectTrigger>
+                                      <SelectContent>
+                                        <SelectItem value="active">Active</SelectItem>
+                                        <SelectItem value="inactive">Inactive</SelectItem>
+                                      </SelectContent>
+                                    </Select>
+                                  ) : (
+                                    <Badge
+                                      className={cn(
+                                        "backdrop-blur-sm border text-xs",
+                                        p.status === "active"
+                                          ? "bg-green-100 text-green-800 border-green-200"
+                                          : p.status === "inactive"
+                                            ? "bg-yellow-100 text-yellow-800 border-yellow-200"
+                                            : "bg-red-100 text-red-800 border-red-200",
+                                      )}
+                                    >
+                                      {p.status}
+                                    </Badge>
+                                  )}
+                                </td>
+                                <td className="p-4">
+                                  <div className="flex gap-2 justify-end flex-wrap">
+                                    {editingPatron?.id === p.id ? (
+                                      <>
+                                        <Button
+                                          size="sm"
+                                          onClick={handleSaveEdit}
+                                          disabled={
+                                            submitting ||
+                                            (editingPatron.phone && getDigitCount(editingPatron.phone) > 11)
+                                          }
+                                          className="bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white border-0 h-8 px-2 text-xs"
+                                        >
+                                          {submitting ? (
+                                            <Loader2 className="h-4 w-4 animate-spin" />
+                                          ) : (
+                                            <Save className="h-4 w-4" />
+                                          )}
+                                        </Button>
+                                        <Button
+                                          size="sm"
+                                          variant="outline"
+                                          onClick={() => setEditingPatron(null)}
+                                          className="backdrop-blur-sm border-border/50 h-8 px-2 text-xs"
+                                        >
+                                          <X className="h-4 w-4" />
+                                        </Button>
+                                      </>
+                                    ) : (
+                                      <>
+                                        {!showArchived && (
+                                          <>
+                                            <Button
+                                              size="sm"
+                                              variant="outline"
+                                              onClick={() => setEditingPatron(p)}
+                                              className="backdrop-blur-sm border-border/50 hover:bg-blue-50 hover:border-blue-200 h-8 px-2 text-xs"
+                                            >
+                                              <Edit className="h-4 w-4 text-blue-600" />
+                                            </Button>
+                                            <Button
+                                              size="sm"
+                                              variant="outline"
+                                              onClick={() => confirmArchive(p)}
+                                              className="backdrop-blur-sm border-border/50 hover:bg-orange-50 hover:border-orange-200 text-orange-600 h-8 px-2 text-xs"
+                                            >
+                                              <Archive className="h-4 w-4" />
+                                            </Button>
+                                          </>
+                                        )}
+                                        {showArchived && (
+                                          <>
+                                            <Button
+                                              size="sm"
+                                              variant="outline"
+                                              onClick={() => confirmRestore(p)}
+                                              className="backdrop-blur-sm border-border/50 hover:bg-green-50 hover:border-green-200 text-green-600 h-8 px-2 text-xs"
+                                              title="Restore to active status"
+                                            >
+                                              <RotateCcw className="h-4 w-4" />
+                                            </Button>
+                                            <Button
+                                              size="sm"
+                                              variant="outline"
+                                              onClick={() => confirmPermanentDelete(p)}
+                                              className="bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-700 hover:to-rose-700 text-white h-8 px-2 text-xs"
+                                              title="Permanently delete patron"
+                                            >
+                                              <Trash2 className="h-4 w-4 mr-2" />
+                                              Delete Permanently
+                                            </Button>
+                                          </>
+                                        )}
+                                      </>
+                                    )}
+                                  </div>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </>
               )}
             </div>
           </div>

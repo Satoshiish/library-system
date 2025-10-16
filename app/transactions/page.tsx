@@ -962,7 +962,7 @@ export default function TransactionsPage() {
                     </CardContent>
                   </Card>
 
-                  {/* Active Transactions Table */}
+                  {/* Active Transactions Table and Mobile View */}
                   {loading ? (
                     <div className="text-center py-8">
                       <Loader2 className="h-8 w-8 animate-spin text-indigo-600 mx-auto mb-4" />
@@ -986,139 +986,248 @@ export default function TransactionsPage() {
                       </Button>
                     </Card>
                   ) : (
-                    <Card className="backdrop-blur-xl border-border/30 bg-gradient-to-b from-background/95 to-background/90 shadow-lg shadow-indigo-500/10 overflow-hidden">
-                      <CardHeader>
-                        <CardTitle className="bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent text-lg sm:text-xl">
-                          Active Transactions ({filteredTransactions.length})
-                        </CardTitle>
-                      </CardHeader>
-                      <CardContent className="p-0">
-                        <div className="overflow-x-auto">
-                          <table className="w-full text-xs sm:text-sm">
-                            <thead className="bg-muted/30 backdrop-blur-sm border-b border-border/30">
-                              <tr className="text-left">
-                                <th className="p-2 sm:p-4 font-medium text-foreground/80">Patron</th>
-                                <th className="p-2 sm:p-4 font-medium text-foreground/80">Book</th>
-                                <th className="p-2 sm:p-4 font-medium text-foreground/80">Due Date</th>
-                                <th className="p-2 sm:p-4 font-medium text-foreground/80">Status</th>
-                                <th className="p-2 sm:p-4 font-medium text-foreground/80 text-right">Actions</th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {filteredTransactions.map((t) => {
-                                const borrowerName = getBorrowerName(t)
-                                const bookTitle = getBookTitle(t)
-                                const bookAuthor = getBookAuthor(t)
-                                const isTransactionOverdue = isOverdue(t)
-                                const overdueStatus = getOverdueStatus(t)
-                                const overdueSeverity = getOverdueSeverity(t)
+                    <>
+                      {/* Mobile Card View */}
+                      <div className="md:hidden space-y-3">
+                        {filteredTransactions.map((t) => {
+                          const borrowerName = getBorrowerName(t)
+                          const bookTitle = getBookTitle(t)
+                          const bookAuthor = getBookAuthor(t)
+                          const isTransactionOverdue = isOverdue(t)
+                          const overdueStatus = getOverdueStatus(t)
 
-                                return (
-                                  <tr
-                                    key={t.id}
-                                    className={cn(
-                                      "border-b border-border/30 hover:bg-muted/20 transition-colors",
-                                      isTransactionOverdue && "bg-red-50/50 hover:bg-red-100/50",
+                          return (
+                            <Card
+                              key={t.id}
+                              className={cn(
+                                "backdrop-blur-xl border-border/30 bg-gradient-to-b from-background/95 to-background/90 shadow-lg shadow-indigo-500/10",
+                                isTransactionOverdue && "border-red-200/50 bg-gradient-to-b from-red-50/10 to-red-50/5",
+                              )}
+                            >
+                              <CardContent className="p-4 space-y-3">
+                                <div className="flex items-start justify-between gap-2">
+                                  <div className="flex items-start gap-2 flex-1 min-w-0">
+                                    {isTransactionOverdue && (
+                                      <AlertTriangle className="h-5 w-5 text-red-500 flex-shrink-0 mt-0.5" />
                                     )}
+                                    <div className="flex-1 min-w-0">
+                                      <p className="text-xs font-medium text-foreground/60">Patron</p>
+                                      <p className="text-sm font-semibold text-foreground break-words">
+                                        {borrowerName}
+                                      </p>
+                                      {t.patrons?.email && (
+                                        <p className="text-xs text-muted-foreground break-words">{t.patrons.email}</p>
+                                      )}
+                                    </div>
+                                  </div>
+                                  <Badge
+                                    variant={getStatusVariant(t.status)}
+                                    className="backdrop-blur-sm text-xs flex-shrink-0"
                                   >
-                                    <td className="p-2 sm:p-4 font-medium">
-                                      <div className="flex items-center gap-1 sm:gap-2">
-                                        {isTransactionOverdue && (
-                                          <AlertTriangle className="h-3 w-3 sm:h-4 sm:w-4 text-red-500 flex-shrink-0" />
-                                        )}
-                                        <User className="h-3 w-3 sm:h-4 sm:w-4 text-indigo-600 flex-shrink-0" />
-                                        <div className="min-w-0">
-                                          <div className="font-medium truncate text-xs sm:text-sm">{borrowerName}</div>
-                                          {t.patrons?.email && (
-                                            <div className="text-xs text-muted-foreground truncate">
-                                              {t.patrons.email}
-                                            </div>
-                                          )}
-                                        </div>
-                                      </div>
-                                    </td>
-                                    <td className="p-2 sm:p-4">
-                                      <div className="flex items-center gap-1 sm:gap-2 min-w-0">
-                                        <Book className="h-3 w-3 sm:h-4 sm:w-4 text-indigo-600 flex-shrink-0" />
-                                        <div className="min-w-0">
-                                          <div className="font-medium truncate text-xs sm:text-sm">{bookTitle}</div>
-                                          <div className="text-xs text-muted-foreground truncate">by {bookAuthor}</div>
-                                        </div>
-                                      </div>
-                                    </td>
-                                    <td className="p-2 sm:p-4">
-                                      <div className="flex items-center gap-1 sm:gap-2">
-                                        <Calendar className="h-3 w-3 sm:h-4 sm:w-4 text-indigo-600 flex-shrink-0" />
-                                        <div>
-                                          <div className="text-xs sm:text-sm">
-                                            {new Date(t.due_date).toLocaleDateString()}
-                                          </div>
+                                    {t.status}
+                                  </Badge>
+                                </div>
+
+                                <div className="border-t border-border/30 pt-3">
+                                  <p className="text-xs font-medium text-foreground/60 mb-1">Book</p>
+                                  <p className="text-sm font-semibold text-foreground break-words">{bookTitle}</p>
+                                  <p className="text-xs text-muted-foreground">by {bookAuthor}</p>
+                                </div>
+
+                                <div className="border-t border-border/30 pt-3">
+                                  <p className="text-xs font-medium text-foreground/60 mb-1">Due Date</p>
+                                  <div className="flex items-center gap-2">
+                                    <Calendar className="h-4 w-4 text-indigo-600 flex-shrink-0" />
+                                    <span className="text-sm">{new Date(t.due_date).toLocaleDateString()}</span>
+                                  </div>
+                                  {isTransactionOverdue && (
+                                    <Badge variant="destructive" className="mt-2 text-xs backdrop-blur-sm">
+                                      {overdueStatus}
+                                    </Badge>
+                                  )}
+                                </div>
+
+                                <div className="flex gap-2 pt-2 flex-wrap">
+                                  {t.status === "borrowed" && (
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      onClick={() => markAsActive(t.id)}
+                                      className="flex-1 backdrop-blur-sm border-border/50 hover:bg-blue-50 hover:border-blue-200 text-xs h-9"
+                                    >
+                                      Activate
+                                    </Button>
+                                  )}
+                                  {t.status !== "returned" && (
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      onClick={() => markAsReturned(t.id)}
+                                      className="flex-1 backdrop-blur-sm border-border/50 hover:bg-green-50 hover:border-green-200 text-xs h-9"
+                                    >
+                                      Return
+                                    </Button>
+                                  )}
+                                  {isTransactionOverdue && (
+                                    <Button
+                                      size="sm"
+                                      variant="destructive"
+                                      onClick={() => sendOverdueReminder(t)}
+                                      className="flex-1 backdrop-blur-sm text-xs h-9"
+                                    >
+                                      <Mail className="h-3 w-3 mr-1" />
+                                      Reminder
+                                    </Button>
+                                  )}
+                                </div>
+                              </CardContent>
+                            </Card>
+                          )
+                        })}
+                      </div>
+
+                      {/* Desktop Table View */}
+                      <Card className="hidden md:block backdrop-blur-xl border-border/30 bg-gradient-to-b from-background/95 to-background/90 shadow-lg shadow-indigo-500/10 overflow-hidden">
+                        <CardHeader>
+                          <CardTitle className="bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent text-lg sm:text-xl">
+                            Active Transactions ({filteredTransactions.length})
+                          </CardTitle>
+                        </CardHeader>
+                        <CardContent className="p-0">
+                          <div className="overflow-x-auto">
+                            <table className="w-full text-xs sm:text-sm">
+                              <thead className="bg-muted/30 backdrop-blur-sm border-b border-border/30">
+                                <tr className="text-left">
+                                  <th className="p-2 sm:p-4 font-medium text-foreground/80">Patron</th>
+                                  <th className="p-2 sm:p-4 font-medium text-foreground/80">Book</th>
+                                  <th className="p-2 sm:p-4 font-medium text-foreground/80">Due Date</th>
+                                  <th className="p-2 sm:p-4 font-medium text-foreground/80">Status</th>
+                                  <th className="p-2 sm:p-4 font-medium text-foreground/80 text-right">Actions</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {filteredTransactions.map((t) => {
+                                  const borrowerName = getBorrowerName(t)
+                                  const bookTitle = getBookTitle(t)
+                                  const bookAuthor = getBookAuthor(t)
+                                  const isTransactionOverdue = isOverdue(t)
+                                  const overdueStatus = getOverdueStatus(t)
+                                  const overdueSeverity = getOverdueSeverity(t)
+
+                                  return (
+                                    <tr
+                                      key={t.id}
+                                      className={cn(
+                                        "border-b border-border/30 hover:bg-muted/20 transition-colors",
+                                        isTransactionOverdue && "bg-red-50/50 hover:bg-red-100/50",
+                                      )}
+                                    >
+                                      <td className="p-2 sm:p-4 font-medium">
+                                        <div className="flex items-center gap-1 sm:gap-2">
                                           {isTransactionOverdue && (
-                                            <Badge variant={overdueSeverity} className="mt-1 text-xs backdrop-blur-sm">
-                                              {overdueStatus}
+                                            <AlertTriangle className="h-3 w-3 sm:h-4 sm:w-4 text-red-500 flex-shrink-0" />
+                                          )}
+                                          <User className="h-3 w-3 sm:h-4 sm:w-4 text-indigo-600 flex-shrink-0" />
+                                          <div className="min-w-0">
+                                            <div className="font-medium truncate text-xs sm:text-sm">
+                                              {borrowerName}
+                                            </div>
+                                            {t.patrons?.email && (
+                                              <div className="text-xs text-muted-foreground truncate">
+                                                {t.patrons.email}
+                                              </div>
+                                            )}
+                                          </div>
+                                        </div>
+                                      </td>
+                                      <td className="p-2 sm:p-4">
+                                        <div className="flex items-center gap-1 sm:gap-2 min-w-0">
+                                          <Book className="h-3 w-3 sm:h-4 sm:w-4 text-indigo-600 flex-shrink-0" />
+                                          <div className="min-w-0">
+                                            <div className="font-medium truncate text-xs sm:text-sm">{bookTitle}</div>
+                                            <div className="text-xs text-muted-foreground truncate">
+                                              by {bookAuthor}
+                                            </div>
+                                          </div>
+                                        </div>
+                                      </td>
+                                      <td className="p-2 sm:p-4">
+                                        <div className="flex items-center gap-1 sm:gap-2">
+                                          <Calendar className="h-3 w-3 sm:h-4 sm:w-4 text-indigo-600 flex-shrink-0" />
+                                          <div>
+                                            <div className="text-xs sm:text-sm">
+                                              {new Date(t.due_date).toLocaleDateString()}
+                                            </div>
+                                            {isTransactionOverdue && (
+                                              <Badge
+                                                variant={overdueSeverity}
+                                                className="mt-1 text-xs backdrop-blur-sm"
+                                              >
+                                                {overdueStatus}
+                                              </Badge>
+                                            )}
+                                          </div>
+                                        </div>
+                                      </td>
+                                      <td className="p-2 sm:p-4">
+                                        <div className="flex flex-col gap-1">
+                                          <Badge
+                                            variant={getStatusVariant(t.status)}
+                                            className="backdrop-blur-sm w-fit text-xs"
+                                          >
+                                            {t.status}
+                                          </Badge>
+                                          {isTransactionOverdue && (
+                                            <Badge variant="destructive" className="text-xs backdrop-blur-sm w-fit">
+                                              Overdue
                                             </Badge>
                                           )}
                                         </div>
-                                      </div>
-                                    </td>
-                                    <td className="p-2 sm:p-4">
-                                      <div className="flex flex-col gap-1">
-                                        <Badge
-                                          variant={getStatusVariant(t.status)}
-                                          className="backdrop-blur-sm w-fit text-xs"
-                                        >
-                                          {t.status}
-                                        </Badge>
-                                        {isTransactionOverdue && (
-                                          <Badge variant="destructive" className="text-xs backdrop-blur-sm w-fit">
-                                            Overdue
-                                          </Badge>
-                                        )}
-                                      </div>
-                                    </td>
-                                    <td className="p-2 sm:p-4 text-right">
-                                      <div className="flex gap-1 sm:gap-2 justify-end flex-wrap">
-                                        {t.status === "borrowed" && (
-                                          <Button
-                                            size="sm"
-                                            variant="outline"
-                                            onClick={() => markAsActive(t.id)}
-                                            className="backdrop-blur-sm border-border/50 hover:bg-blue-50 hover:border-blue-200 text-xs h-8"
-                                          >
-                                            Activate
-                                          </Button>
-                                        )}
-                                        {t.status !== "returned" && (
-                                          <Button
-                                            size="sm"
-                                            variant="outline"
-                                            onClick={() => markAsReturned(t.id)}
-                                            className="backdrop-blur-sm border-border/50 hover:bg-green-50 hover:border-green-200 text-xs h-8"
-                                          >
-                                            Return
-                                          </Button>
-                                        )}
-                                        {isTransactionOverdue && (
-                                          <Button
-                                            size="sm"
-                                            variant="destructive"
-                                            onClick={() => sendOverdueReminder(t)}
-                                            className="backdrop-blur-sm text-xs h-8"
-                                          >
-                                            <Mail className="h-3 w-3 mr-1" />
-                                            <span className="hidden sm:inline">Reminder</span>
-                                          </Button>
-                                        )}
-                                      </div>
-                                    </td>
-                                  </tr>
-                                )
-                              })}
-                            </tbody>
-                          </table>
-                        </div>
-                      </CardContent>
-                    </Card>
+                                      </td>
+                                      <td className="p-2 sm:p-4 text-right">
+                                        <div className="flex gap-1 sm:gap-2 justify-end flex-wrap">
+                                          {t.status === "borrowed" && (
+                                            <Button
+                                              size="sm"
+                                              variant="outline"
+                                              onClick={() => markAsActive(t.id)}
+                                              className="backdrop-blur-sm border-border/50 hover:bg-blue-50 hover:border-blue-200 text-xs h-8"
+                                            >
+                                              Activate
+                                            </Button>
+                                          )}
+                                          {t.status !== "returned" && (
+                                            <Button
+                                              size="sm"
+                                              variant="outline"
+                                              onClick={() => markAsReturned(t.id)}
+                                              className="backdrop-blur-sm border-border/50 hover:bg-green-50 hover:border-green-200 text-xs h-8"
+                                            >
+                                              Return
+                                            </Button>
+                                          )}
+                                          {isTransactionOverdue && (
+                                            <Button
+                                              size="sm"
+                                              variant="destructive"
+                                              onClick={() => sendOverdueReminder(t)}
+                                              className="backdrop-blur-sm text-xs h-8"
+                                            >
+                                              <Mail className="h-3 w-3 mr-1" />
+                                              <span className="hidden sm:inline">Reminder</span>
+                                            </Button>
+                                          )}
+                                        </div>
+                                      </td>
+                                    </tr>
+                                  )
+                                })}
+                              </tbody>
+                            </table>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    </>
                   )}
                 </TabsContent>
 
