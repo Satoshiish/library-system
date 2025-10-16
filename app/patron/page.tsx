@@ -337,72 +337,72 @@ export default function PatronPage() {
       <div className="flex min-h-screen bg-gradient-to-br from-slate-50 via-blue-50/30 to-indigo-100/50">
         <Sidebar />
 
-        <main className="flex-1 lg:ml-64 p-6 space-y-6">
-          <div className="max-w-7xl mx-auto space-y-6">
+        <main className="flex-1 lg:ml-64 p-3 sm:p-4 md:p-6 space-y-4 sm:space-y-5 md:space-y-6">
+          <div className="max-w-7xl mx-auto space-y-4 sm:space-y-5 md:space-y-6">
             {/* Header */}
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-              <div>
-                <h1 className="text-2xl sm:text-3xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">
+            <div className="flex flex-col xs:flex-row xs:items-center xs:justify-between gap-3 sm:gap-4">
+              <div className="flex-1 min-w-0">
+                <h1 className="text-xl sm:text-2xl md:text-3xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent break-words">
                   Patrons
                 </h1>
-                <p className="text-muted-foreground">Manage library members and their information</p>
+                <p className="text-muted-foreground text-sm sm:text-base mt-1">Manage library members and their information</p>
               </div>
               <Button
                 variant="outline"
                 onClick={() => setShowArchived(!showArchived)}
-                className="backdrop-blur-sm border-border/50 hover:bg-indigo-50 hover:border-indigo-200"
+                className="backdrop-blur-sm border-border/50 hover:bg-indigo-50 hover:border-indigo-200 w-full xs:w-auto mt-2 xs:mt-0"
               >
                 {showArchived ? (
                   <>
-                    <Users className="h-4 w-4 mr-2" />
-                    View Active Patrons
+                    <Users className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
+                    <span className="text-xs sm:text-sm">View Active</span>
                   </>
                 ) : (
                   <>
-                    <Archive className="h-4 w-4 mr-2" />
-                    View Archived Patrons
+                    <Archive className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
+                    <span className="text-xs sm:text-sm">View Archived</span>
                   </>
                 )}
               </Button>
             </div>
 
             {/* Stats Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 md:gap-6">
               <Card className="backdrop-blur-xl border-border/30 bg-gradient-to-b from-background/95 to-background/90 shadow-lg shadow-indigo-500/10">
-                <CardHeader className="flex flex-row items-center justify-between pb-2">
-                  <CardTitle className="text-sm font-medium text-foreground/80">Total Patrons</CardTitle>
-                  <div className="p-2 rounded-lg bg-gradient-to-tr from-indigo-500/20 to-purple-500/20">
-                    <Users className="h-4 w-4 text-indigo-600" />
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 px-3 sm:px-4 pt-3 sm:pt-4">
+                  <CardTitle className="text-xs sm:text-sm font-medium text-foreground/80">Total Patrons</CardTitle>
+                  <div className="p-1.5 sm:p-2 rounded-lg bg-gradient-to-tr from-indigo-500/20 to-purple-500/20">
+                    <Users className="h-3 w-3 sm:h-4 sm:w-4 text-indigo-600" />
                   </div>
                 </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold text-foreground">{totalPatrons}</div>
+                <CardContent className="px-3 sm:px-4 pb-3 sm:pb-4">
+                  <div className="text-lg sm:text-xl md:text-2xl font-bold text-foreground">{totalPatrons}</div>
                   <p className="text-xs text-muted-foreground">All library members</p>
                 </CardContent>
               </Card>
 
               <Card className="backdrop-blur-xl border-border/30 bg-gradient-to-b from-background/95 to-background/90 shadow-lg shadow-indigo-500/10">
-                <CardHeader className="flex flex-row items-center justify-between pb-2">
-                  <CardTitle className="text-sm font-medium text-foreground/80">Active Patrons</CardTitle>
-                  <div className="p-2 rounded-lg bg-gradient-to-tr from-green-500/20 to-emerald-500/20">
-                    <User className="h-4 w-4 text-green-600" />
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 px-3 sm:px-4 pt-3 sm:pt-4">
+                  <CardTitle className="text-xs sm:text-sm font-medium text-foreground/80">Active Patrons</CardTitle>
+                  <div className="p-1.5 sm:p-2 rounded-lg bg-gradient-to-tr from-green-500/20 to-emerald-500/20">
+                    <User className="h-3 w-3 sm:h-4 sm:w-4 text-green-600" />
                   </div>
                 </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold text-foreground">{activePatrons}</div>
+                <CardContent className="px-3 sm:px-4 pb-3 sm:pb-4">
+                  <div className="text-lg sm:text-xl md:text-2xl font-bold text-foreground">{activePatrons}</div>
                   <p className="text-xs text-muted-foreground">Currently active members</p>
                 </CardContent>
               </Card>
 
               <Card className="backdrop-blur-xl border-border/30 bg-gradient-to-b from-background/95 to-background/90 shadow-lg shadow-indigo-500/10">
-                <CardHeader className="flex flex-row items-center justify-between pb-2">
-                  <CardTitle className="text-sm font-medium text-foreground/80">Archived</CardTitle>
-                  <div className="p-2 rounded-lg bg-gradient-to-tr from-gray-500/20 to-slate-500/20">
-                    <Archive className="h-4 w-4 text-gray-600" />
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 px-3 sm:px-4 pt-3 sm:pt-4">
+                  <CardTitle className="text-xs sm:text-sm font-medium text-foreground/80">Archived</CardTitle>
+                  <div className="p-1.5 sm:p-2 rounded-lg bg-gradient-to-tr from-gray-500/20 to-slate-500/20">
+                    <Archive className="h-3 w-3 sm:h-4 sm:w-4 text-gray-600" />
                   </div>
                 </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold text-foreground">{archivedPatrons}</div>
+                <CardContent className="px-3 sm:px-4 pb-3 sm:pb-4">
+                  <div className="text-lg sm:text-xl md:text-2xl font-bold text-foreground">{archivedPatrons}</div>
                   <p className="text-xs text-muted-foreground">Inactive members</p>
                 </CardContent>
               </Card>
@@ -411,44 +411,44 @@ export default function PatronPage() {
             {/* Add Patron Form - Only show for active view */}
             {!showArchived && (
               <Card className="backdrop-blur-xl border-border/30 bg-gradient-to-b from-background/95 to-background/90 shadow-lg shadow-indigo-500/10">
-                <CardHeader>
-                  <CardTitle className="bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">
+                <CardHeader className="px-3 sm:px-4 pt-3 sm:pt-4 pb-2">
+                  <CardTitle className="bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent text-base sm:text-lg">
                     Add New Patron
                   </CardTitle>
-                  <CardDescription>Create a new library member account</CardDescription>
+                  <CardDescription className="text-xs sm:text-sm">Create a new library member account</CardDescription>
                 </CardHeader>
-                <CardContent>
-                  <form onSubmit={handleAddPatron} className="space-y-4">
-                    <div className="grid gap-4 md:grid-cols-3">
-                      <div className="space-y-3">
-                        <Label htmlFor="full_name" className="text-sm font-medium text-foreground/80">Full Name *</Label>
+                <CardContent className="px-3 sm:px-4 pb-3 sm:pb-4">
+                  <form onSubmit={handleAddPatron} className="space-y-3 sm:space-y-4">
+                    <div className="grid gap-3 sm:gap-4 grid-cols-1 md:grid-cols-3">
+                      <div className="space-y-2">
+                        <Label htmlFor="full_name" className="text-xs sm:text-sm font-medium text-foreground/80">Full Name *</Label>
                         <Input
                           id="full_name"
                           value={newPatron.full_name}
                           onChange={e => setNewPatron({ ...newPatron, full_name: e.target.value })}
                           placeholder="John Doe"
-                          className="bg-background/50 border-border/50 focus:border-indigo-300 transition-colors h-11"
+                          className="bg-background/50 border-border/50 focus:border-indigo-300 transition-colors h-9 sm:h-10 text-xs sm:text-sm"
                           required
                         />
                       </div>
-                      <div className="space-y-3">
-                        <Label htmlFor="email" className="text-sm font-medium text-foreground/80">Email *</Label>
+                      <div className="space-y-2">
+                        <Label htmlFor="email" className="text-xs sm:text-sm font-medium text-foreground/80">Email *</Label>
                         <Input
                           id="email"
                           value={newPatron.email}
                           onChange={e => setNewPatron({ ...newPatron, email: e.target.value })}
                           type="email"
                           placeholder="john@example.com"
-                          className="bg-background/50 border-border/50 focus:border-indigo-300 transition-colors h-11"
+                          className="bg-background/50 border-border/50 focus:border-indigo-300 transition-colors h-9 sm:h-10 text-xs sm:text-sm"
                           required
                         />
                       </div>
-                      <div className="space-y-3">
-                        <Label htmlFor="phone" className="text-sm font-medium text-foreground/80">
+                      <div className="space-y-2">
+                        <Label htmlFor="phone" className="text-xs sm:text-sm font-medium text-foreground/80">
                           Phone 
                           {newPatron.phone && (
                             <span className={cn(
-                              "ml-2 text-xs",
+                              "ml-1 sm:ml-2 text-xs",
                               getDigitCount(newPatron.phone) > 11 ? "text-red-600 font-medium" : "text-muted-foreground"
                             )}>
                               ({getDigitCount(newPatron.phone)}/11 digits)
@@ -461,7 +461,7 @@ export default function PatronPage() {
                           onChange={e => setNewPatron({ ...newPatron, phone: handlePhoneInput(e.target.value) })}
                           placeholder="09XXXXXXXXX"
                           className={cn(
-                            "bg-background/50 border-border/50 focus:border-indigo-300 transition-colors h-11",
+                            "bg-background/50 border-border/50 focus:border-indigo-300 transition-colors h-9 sm:h-10 text-xs sm:text-sm",
                             newPatron.phone && getDigitCount(newPatron.phone) > 11 && "border-red-300 focus:border-red-300"
                           )}
                           maxLength={15} // Allow for formatting characters
@@ -480,18 +480,18 @@ export default function PatronPage() {
                           "bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700",
                           "text-white shadow-lg shadow-indigo-500/25 hover:shadow-indigo-500/40",
                           "transition-all duration-300 transform hover:scale-[1.02]",
-                          "border-0 h-11",
+                          "border-0 h-9 sm:h-10 text-xs sm:text-sm w-full sm:w-auto",
                           (newPatron.phone && getDigitCount(newPatron.phone) > 11) && "opacity-50 cursor-not-allowed"
                         )}
                       >
                         {submitting ? (
                           <>
-                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                            <Loader2 className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2 animate-spin" />
                             Adding...
                           </>
                         ) : (
                           <>
-                            <Plus className="h-4 w-4 mr-2" />
+                            <Plus className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
                             Add Patron
                           </>
                         )}
@@ -504,35 +504,35 @@ export default function PatronPage() {
 
             {/* Search Filters */}
             <Card className="backdrop-blur-xl border-border/30 bg-gradient-to-b from-background/95 to-background/90 shadow-lg shadow-indigo-500/10">
-              <CardHeader>
-                <CardTitle className="bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">
+              <CardHeader className="px-3 sm:px-4 pt-3 sm:pt-4 pb-2">
+                <CardTitle className="bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent text-base sm:text-lg">
                   {showArchived ? "Archived Patrons" : "Active Patrons"}
                 </CardTitle>
-                <CardDescription>
+                <CardDescription className="text-xs sm:text-sm">
                   {showArchived 
                     ? "Manage archived library members - restore or permanently delete accounts" 
                     : "Find patrons by name or email"
                   }
                 </CardDescription>
               </CardHeader>
-              <CardContent>
-                <div className="grid gap-4 md:grid-cols-2">
-                  <div className="space-y-3">
-                    <Label className="text-sm font-medium text-foreground/80">Search by Name</Label>
+              <CardContent className="px-3 sm:px-4 pb-3 sm:pb-4">
+                <div className="grid gap-3 sm:gap-4 grid-cols-1 md:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label className="text-xs sm:text-sm font-medium text-foreground/80">Search by Name</Label>
                     <Input
                       placeholder="Full name"
                       value={search.name}
                       onChange={e => setSearch({ ...search, name: e.target.value })}
-                      className="bg-background/50 border-border/50 focus:border-indigo-300 transition-colors h-11"
+                      className="bg-background/50 border-border/50 focus:border-indigo-300 transition-colors h-9 sm:h-10 text-xs sm:text-sm"
                     />
                   </div>
-                  <div className="space-y-3">
-                    <Label className="text-sm font-medium text-foreground/80">Search by Email</Label>
+                  <div className="space-y-2">
+                    <Label className="text-xs sm:text-sm font-medium text-foreground/80">Search by Email</Label>
                     <Input
                       placeholder="Email"
                       value={search.email}
                       onChange={e => setSearch({ ...search, email: e.target.value })}
-                      className="bg-background/50 border-border/50 focus:border-indigo-300 transition-colors h-11"
+                      className="bg-background/50 border-border/50 focus:border-indigo-300 transition-colors h-9 sm:h-10 text-xs sm:text-sm"
                     />
                   </div>
                 </div>
@@ -541,78 +541,78 @@ export default function PatronPage() {
 
             {/* Patrons Table */}
             {loading ? (
-              <div className="text-center py-8">
-                <Loader2 className="h-8 w-8 animate-spin text-indigo-600 mx-auto mb-4" />
-                <p className="text-muted-foreground">Loading patrons...</p>
+              <div className="text-center py-6 sm:py-8">
+                <Loader2 className="h-6 w-6 sm:h-8 sm:w-8 animate-spin text-indigo-600 mx-auto mb-3 sm:mb-4" />
+                <p className="text-muted-foreground text-sm sm:text-base">Loading patrons...</p>
               </div>
             ) : filteredPatrons.length === 0 ? (
-              <Card className="backdrop-blur-xl border-border/30 text-center py-8">
-                <Users className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                <h3 className="text-lg font-medium text-foreground mb-2">
+              <Card className="backdrop-blur-xl border-border/30 text-center py-6 sm:py-8">
+                <Users className="h-8 w-8 sm:h-12 sm:w-12 text-muted-foreground mx-auto mb-3 sm:mb-4" />
+                <h3 className="text-base sm:text-lg font-medium text-foreground mb-1 sm:mb-2">
                   {showArchived ? "No archived patrons found" : "No patrons found"}
                 </h3>
-                <p className="text-muted-foreground">
+                <p className="text-muted-foreground text-xs sm:text-sm">
                   {patrons.length === 0 ? "No patrons in the system yet." : "Try adjusting your search criteria."}
                 </p>
               </Card>
             ) : (
               <Card className="backdrop-blur-xl border-border/30 bg-gradient-to-b from-background/95 to-background/90 shadow-lg shadow-indigo-500/10 overflow-hidden">
-                <CardHeader>
-                  <CardTitle className="bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">
+                <CardHeader className="px-3 sm:px-4 pt-3 sm:pt-4 pb-2">
+                  <CardTitle className="bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent text-base sm:text-lg">
                     {showArchived ? "Archived Patrons" : "Active Patrons"} ({filteredPatrons.length})
                   </CardTitle>
                   {showArchived && (
-                    <CardDescription className="text-orange-600 flex items-center gap-2">
-                      <AlertTriangle className="h-4 w-4" />
+                    <CardDescription className="text-orange-600 flex items-center gap-1 sm:gap-2 text-xs sm:text-sm">
+                      <AlertTriangle className="h-3 w-3 sm:h-4 sm:w-4 flex-shrink-0" />
                       Warning: Permanent deletion cannot be undone and will remove all patron data permanently.
                     </CardDescription>
                   )}
                 </CardHeader>
                 <CardContent className="p-0">
                   <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
+                    <table className="w-full text-xs sm:text-sm">
                       <thead className="bg-muted/30 backdrop-blur-sm border-b border-border/30">
                         <tr className="text-left">
-                          <th className="p-4 font-medium text-foreground/80">Full Name</th>
-                          <th className="p-4 font-medium text-foreground/80">Email</th>
-                          <th className="p-4 font-medium text-foreground/80">Phone</th>
-                          <th className="p-4 font-medium text-foreground/80">Member Since</th>
-                          <th className="p-4 font-medium text-foreground/80">Status</th>
-                          <th className="p-4 font-medium text-foreground/80 text-right">Actions</th>
+                          <th className="p-2 sm:p-3 md:p-4 font-medium text-foreground/80 whitespace-nowrap">Full Name</th>
+                          <th className="p-2 sm:p-3 md:p-4 font-medium text-foreground/80 whitespace-nowrap">Email</th>
+                          <th className="p-2 sm:p-3 md:p-4 font-medium text-foreground/80 whitespace-nowrap">Phone</th>
+                          <th className="p-2 sm:p-3 md:p-4 font-medium text-foreground/80 whitespace-nowrap">Member Since</th>
+                          <th className="p-2 sm:p-3 md:p-4 font-medium text-foreground/80 whitespace-nowrap">Status</th>
+                          <th className="p-2 sm:p-3 md:p-4 font-medium text-foreground/80 text-right whitespace-nowrap">Actions</th>
                         </tr>
                       </thead>
                       <tbody>
                         {filteredPatrons.map(p => (
                           <tr key={p.id} className="border-b border-border/30 hover:bg-muted/20 transition-colors">
-                            <td className="p-4">
+                            <td className="p-2 sm:p-3 md:p-4">
                               {editingPatron?.id === p.id ? (
                                 <Input
                                   value={editingPatron.full_name}
                                   onChange={e => setEditingPatron({ ...editingPatron, full_name: e.target.value })}
-                                  className="bg-background/50 border-border/50 h-9"
+                                  className="bg-background/50 border-border/50 h-8 sm:h-9 text-xs sm:text-sm"
                                 />
                               ) : (
-                                <div className="flex items-center gap-2">
-                                  <User className="h-4 w-4 text-indigo-600" />
-                                  {p.full_name}
+                                <div className="flex items-center gap-1 sm:gap-2 min-w-[120px]">
+                                  <User className="h-3 w-3 sm:h-4 sm:w-4 text-indigo-600 flex-shrink-0" />
+                                  <span className="truncate">{p.full_name}</span>
                                 </div>
                               )}
                             </td>
-                            <td className="p-4">
+                            <td className="p-2 sm:p-3 md:p-4">
                               {editingPatron?.id === p.id ? (
                                 <Input
                                   value={editingPatron.email}
                                   onChange={e => setEditingPatron({ ...editingPatron, email: e.target.value })}
-                                  className="bg-background/50 border-border/50 h-9"
+                                  className="bg-background/50 border-border/50 h-8 sm:h-9 text-xs sm:text-sm"
                                 />
                               ) : (
-                                <div className="flex items-center gap-2">
-                                  <Mail className="h-4 w-4 text-indigo-600" />
-                                  {p.email}
+                                <div className="flex items-center gap-1 sm:gap-2 min-w-[150px]">
+                                  <Mail className="h-3 w-3 sm:h-4 sm:w-4 text-indigo-600 flex-shrink-0" />
+                                  <span className="truncate">{p.email}</span>
                                 </div>
                               )}
                             </td>
-                            <td className="p-4">
+                            <td className="p-2 sm:p-3 md:p-4">
                               {editingPatron?.id === p.id ? (
                                 <div className="space-y-1">
                                   <Input
@@ -620,7 +620,7 @@ export default function PatronPage() {
                                     onChange={e => setEditingPatron({ ...editingPatron, phone: handlePhoneInput(e.target.value) })}
                                     placeholder="09XXXXXXXXX"
                                     className={cn(
-                                      "bg-background/50 border-border/50 h-9",
+                                      "bg-background/50 border-border/50 h-8 sm:h-9 text-xs sm:text-sm",
                                       editingPatron.phone && getDigitCount(editingPatron.phone) > 11 && "border-red-300"
                                     )}
                                     maxLength={15}
@@ -635,19 +635,19 @@ export default function PatronPage() {
                                   )}
                                 </div>
                               ) : (
-                                <div className="flex items-center gap-2">
-                                  <Phone className="h-4 w-4 text-indigo-600" />
-                                  {p.phone || "-"}
+                                <div className="flex items-center gap-1 sm:gap-2">
+                                  <Phone className="h-3 w-3 sm:h-4 sm:w-4 text-indigo-600 flex-shrink-0" />
+                                  <span className="truncate">{p.phone || "-"}</span>
                                 </div>
                               )}
                             </td>
-                            <td className="p-4">
-                              <div className="flex items-center gap-2">
-                                <Calendar className="h-4 w-4 text-indigo-600" />
+                            <td className="p-2 sm:p-3 md:p-4">
+                              <div className="flex items-center gap-1 sm:gap-2 whitespace-nowrap">
+                                <Calendar className="h-3 w-3 sm:h-4 sm:w-4 text-indigo-600 flex-shrink-0" />
                                 {new Date(p.member_since).toLocaleDateString()}
                               </div>
                             </td>
-                            <td className="p-4">
+                            <td className="p-2 sm:p-3 md:p-4">
                               {editingPatron?.id === p.id ? (
                                 <Select
                                   value={editingPatron.status}
@@ -655,7 +655,7 @@ export default function PatronPage() {
                                     setEditingPatron({ ...editingPatron, status: value })
                                   }
                                 >
-                                  <SelectTrigger className="bg-background/50 border-border/50 h-9 w-32">
+                                  <SelectTrigger className="bg-background/50 border-border/50 h-8 sm:h-9 w-28 sm:w-32 text-xs sm:text-sm">
                                     <SelectValue />
                                   </SelectTrigger>
                                   <SelectContent>
@@ -666,7 +666,7 @@ export default function PatronPage() {
                               ) : (
                                 <Badge
                                   className={cn(
-                                    "backdrop-blur-sm border",
+                                    "backdrop-blur-sm border text-xs",
                                     p.status === "active" 
                                       ? "bg-green-100 text-green-800 border-green-200" 
                                       : p.status === "inactive" 
@@ -678,72 +678,74 @@ export default function PatronPage() {
                                 </Badge>
                               )}
                             </td>
-                            <td className="p-4 flex gap-2 justify-end">
-                              {editingPatron?.id === p.id ? (
-                                <>
-                                  <Button 
-                                    size="sm" 
-                                    onClick={handleSaveEdit}
-                                    disabled={submitting || (editingPatron.phone && getDigitCount(editingPatron.phone) > 11)}
-                                    className="bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white border-0"
-                                  >
-                                    {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-                                  </Button>
-                                  <Button 
-                                    size="sm" 
-                                    variant="outline" 
-                                    onClick={() => setEditingPatron(null)}
-                                    className="backdrop-blur-sm border-border/50"
-                                  >
-                                    <X className="h-4 w-4" />
-                                  </Button>
-                                </>
-                              ) : (
-                                <>
-                                  {!showArchived && (
-                                    <>
-                                      <Button 
-                                        size="sm" 
-                                        variant="outline" 
-                                        onClick={() => setEditingPatron(p)}
-                                        className="backdrop-blur-sm border-border/50 hover:bg-blue-50 hover:border-blue-200"
-                                      >
-                                        <Edit className="h-4 w-4 text-blue-600" />
-                                      </Button>
-                                      <Button 
-                                        size="sm" 
-                                        variant="outline" 
-                                        onClick={() => confirmArchive(p)}
-                                        className="backdrop-blur-sm border-border/50 hover:bg-orange-50 hover:border-orange-200 text-orange-600"
-                                      >
-                                        <Archive className="h-4 w-4" />
-                                      </Button>
-                                    </>
-                                  )}
-                                  {showArchived && (
-                                    <>
-                                      <Button 
-                                        size="sm" 
-                                        variant="outline" 
-                                        onClick={() => confirmRestore(p)}
-                                        className="backdrop-blur-sm border-border/50 hover:bg-green-50 hover:border-green-200 text-green-600"
-                                        title="Restore to active status"
-                                      >
-                                        <RotateCcw className="h-4 w-4" />
-                                      </Button>
-                                      <Button 
-                                        size="sm" 
-                                        variant="outline" 
-                                        onClick={() => confirmPermanentDelete(p)}
-                                        className="backdrop-blur-sm border-border/50 hover:bg-red-50 hover:border-red-200 text-red-600"
-                                        title="Permanently delete patron"
-                                      >
-                                        <Trash2 className="h-4 w-4" />
-                                      </Button>
-                                    </>
-                                  )}
-                                </>
-                              )}
+                            <td className="p-2 sm:p-3 md:p-4">
+                              <div className="flex gap-1 sm:gap-2 justify-end flex-wrap">
+                                {editingPatron?.id === p.id ? (
+                                  <>
+                                    <Button 
+                                      size="sm" 
+                                      onClick={handleSaveEdit}
+                                      disabled={submitting || (editingPatron.phone && getDigitCount(editingPatron.phone) > 11)}
+                                      className="bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white border-0 h-7 sm:h-8 px-2 text-xs"
+                                    >
+                                      {submitting ? <Loader2 className="h-3 w-3 sm:h-4 sm:w-4 animate-spin" /> : <Save className="h-3 w-3 sm:h-4 sm:w-4" />}
+                                    </Button>
+                                    <Button 
+                                      size="sm" 
+                                      variant="outline" 
+                                      onClick={() => setEditingPatron(null)}
+                                      className="backdrop-blur-sm border-border/50 h-7 sm:h-8 px-2 text-xs"
+                                    >
+                                      <X className="h-3 w-3 sm:h-4 sm:w-4" />
+                                    </Button>
+                                  </>
+                                ) : (
+                                  <>
+                                    {!showArchived && (
+                                      <>
+                                        <Button 
+                                          size="sm" 
+                                          variant="outline" 
+                                          onClick={() => setEditingPatron(p)}
+                                          className="backdrop-blur-sm border-border/50 hover:bg-blue-50 hover:border-blue-200 h-7 sm:h-8 px-2 text-xs"
+                                        >
+                                          <Edit className="h-3 w-3 sm:h-4 sm:w-4 text-blue-600" />
+                                        </Button>
+                                        <Button 
+                                          size="sm" 
+                                          variant="outline" 
+                                          onClick={() => confirmArchive(p)}
+                                          className="backdrop-blur-sm border-border/50 hover:bg-orange-50 hover:border-orange-200 text-orange-600 h-7 sm:h-8 px-2 text-xs"
+                                        >
+                                          <Archive className="h-3 w-3 sm:h-4 sm:w-4" />
+                                        </Button>
+                                      </>
+                                    )}
+                                    {showArchived && (
+                                      <>
+                                        <Button 
+                                          size="sm" 
+                                          variant="outline" 
+                                          onClick={() => confirmRestore(p)}
+                                          className="backdrop-blur-sm border-border/50 hover:bg-green-50 hover:border-green-200 text-green-600 h-7 sm:h-8 px-2 text-xs"
+                                          title="Restore to active status"
+                                        >
+                                          <RotateCcw className="h-3 w-3 sm:h-4 sm:w-4" />
+                                        </Button>
+                                        <Button 
+                                          size="sm" 
+                                          variant="outline" 
+                                          onClick={() => confirmPermanentDelete(p)}
+                                          className="backdrop-blur-sm border-border/50 hover:bg-red-50 hover:border-red-200 text-red-600 h-7 sm:h-8 px-2 text-xs"
+                                          title="Permanently delete patron"
+                                        >
+                                          <Trash2 className="h-3 w-3 sm:h-4 sm:w-4" />
+                                        </Button>
+                                      </>
+                                    )}
+                                  </>
+                                )}
+                              </div>
                             </td>
                           </tr>
                         ))}
@@ -758,19 +760,19 @@ export default function PatronPage() {
 
         {/* Archive Confirmation Modal */}
         {archiveConfirmOpen && (
-          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50">
-            <div className="backdrop-blur-xl border-border/30 bg-gradient-to-b from-background/95 to-background/90 p-6 rounded-lg w-96 relative shadow-2xl shadow-indigo-500/10">
-              <h3 className="text-lg font-semibold mb-2 text-orange-600">Archive Patron</h3>
-              <p className="text-sm text-muted-foreground mb-4">
+          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-3 sm:p-4">
+            <div className="backdrop-blur-xl border-border/30 bg-gradient-to-b from-background/95 to-background/90 p-4 sm:p-6 rounded-lg w-full max-w-96 relative shadow-2xl shadow-indigo-500/10">
+              <h3 className="text-base sm:text-lg font-semibold mb-2 text-orange-600">Archive Patron</h3>
+              <p className="text-xs sm:text-sm text-muted-foreground mb-4">
                 Are you sure you want to archive "<strong>{patronToArchive?.full_name}</strong>"?
                 This will make them inactive but preserve their data.
               </p>
-              <div className="flex justify-end gap-3">
+              <div className="flex justify-end gap-2 sm:gap-3">
                 <Button 
                   variant="outline" 
                   onClick={() => setArchiveConfirmOpen(false)}
                   disabled={submitting}
-                  className="backdrop-blur-sm border-border/50"
+                  className="backdrop-blur-sm border-border/50 text-xs sm:text-sm h-8 sm:h-9"
                 >
                   Cancel
                 </Button>
@@ -778,9 +780,9 @@ export default function PatronPage() {
                   variant="outline"
                   onClick={handleArchive}
                   disabled={submitting}
-                  className="bg-orange-100 text-orange-700 border-orange-200 hover:bg-orange-200"
+                  className="bg-orange-100 text-orange-700 border-orange-200 hover:bg-orange-200 text-xs sm:text-sm h-8 sm:h-9"
                 >
-                  {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Archive className="h-4 w-4 mr-2" />}
+                  {submitting ? <Loader2 className="h-3 w-3 sm:h-4 sm:w-4 animate-spin" /> : <Archive className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />}
                   Archive
                 </Button>
               </div>
@@ -790,28 +792,28 @@ export default function PatronPage() {
 
         {/* Restore Confirmation Modal */}
         {restoreConfirmOpen && (
-          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50">
-            <div className="backdrop-blur-xl border-border/30 bg-gradient-to-b from-background/95 to-background/90 p-6 rounded-lg w-96 relative shadow-2xl shadow-indigo-500/10">
-              <h3 className="text-lg font-semibold mb-2 text-green-600">Restore Patron</h3>
-              <p className="text-sm text-muted-foreground mb-4">
+          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-3 sm:p-4">
+            <div className="backdrop-blur-xl border-border/30 bg-gradient-to-b from-background/95 to-background/90 p-4 sm:p-6 rounded-lg w-full max-w-96 relative shadow-2xl shadow-indigo-500/10">
+              <h3 className="text-base sm:text-lg font-semibold mb-2 text-green-600">Restore Patron</h3>
+              <p className="text-xs sm:text-sm text-muted-foreground mb-4">
                 Are you sure you want to restore "<strong>{patronToRestore?.full_name}</strong>"?
                 This will make them active again.
               </p>
-              <div className="flex justify-end gap-3">
+              <div className="flex justify-end gap-2 sm:gap-3">
                 <Button 
                   variant="outline" 
                   onClick={() => setRestoreConfirmOpen(false)}
                   disabled={submitting}
-                  className="backdrop-blur-sm border-border/50"
+                  className="backdrop-blur-sm border-border/50 text-xs sm:text-sm h-8 sm:h-9"
                 >
                   Cancel
                 </Button>
                 <Button 
                   onClick={handleRestore}
                   disabled={submitting}
-                  className="bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white"
+                  className="bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white text-xs sm:text-sm h-8 sm:h-9"
                 >
-                  {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <RotateCcw className="h-4 w-4 mr-2" />}
+                  {submitting ? <Loader2 className="h-3 w-3 sm:h-4 sm:w-4 animate-spin" /> : <RotateCcw className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />}
                   Restore
                 </Button>
               </div>
@@ -821,28 +823,28 @@ export default function PatronPage() {
 
         {/* Permanent Delete Confirmation Modal */}
         {permanentDeleteConfirmOpen && (
-          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50">
-            <div className="backdrop-blur-xl border-border/30 bg-gradient-to-b from-background/95 to-background/90 p-6 rounded-lg w-96 relative shadow-2xl shadow-indigo-500/10">
-              <div className="flex items-center gap-3 mb-4">
-                <AlertTriangle className="h-6 w-6 text-red-600" />
-                <h3 className="text-lg font-semibold text-red-600">Permanently Delete Patron</h3>
+          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-3 sm:p-4">
+            <div className="backdrop-blur-xl border-border/30 bg-gradient-to-b from-background/95 to-background/90 p-4 sm:p-6 rounded-lg w-full max-w-96 relative shadow-2xl shadow-indigo-500/10">
+              <div className="flex items-center gap-2 sm:gap-3 mb-3 sm:mb-4">
+                <AlertTriangle className="h-4 w-4 sm:h-6 sm:w-6 text-red-600 flex-shrink-0" />
+                <h3 className="text-base sm:text-lg font-semibold text-red-600">Permanently Delete Patron</h3>
               </div>
-              <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-4">
-                <p className="text-sm text-red-800 font-medium mb-2">⚠️ This action cannot be undone!</p>
-                <p className="text-sm text-red-700">
+              <div className="bg-red-50 border border-red-200 rounded-lg p-3 sm:p-4 mb-3 sm:mb-4">
+                <p className="text-xs sm:text-sm text-red-800 font-medium mb-1 sm:mb-2">⚠️ This action cannot be undone!</p>
+                <p className="text-xs sm:text-sm text-red-700">
                   You are about to permanently delete "<strong>{patronToPermanentDelete?.full_name}</strong>". 
                   This will remove all their data from the system including any associated records.
                 </p>
               </div>
-              <p className="text-sm text-muted-foreground mb-4">
+              <p className="text-xs sm:text-sm text-muted-foreground mb-3 sm:mb-4">
                 Are you absolutely sure you want to proceed with permanent deletion?
               </p>
-              <div className="flex justify-end gap-3">
+              <div className="flex justify-end gap-2 sm:gap-3">
                 <Button 
                   variant="outline" 
                   onClick={() => setPermanentDeleteConfirmOpen(false)}
                   disabled={submitting}
-                  className="backdrop-blur-sm border-border/50"
+                  className="backdrop-blur-sm border-border/50 text-xs sm:text-sm h-8 sm:h-9"
                 >
                   Cancel
                 </Button>
@@ -850,13 +852,13 @@ export default function PatronPage() {
                   variant="destructive" 
                   onClick={handlePermanentDelete}
                   disabled={submitting}
-                  className="backdrop-blur-sm"
+                  className="backdrop-blur-sm text-xs sm:text-sm h-8 sm:h-9"
                 >
                   {submitting ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
+                    <Loader2 className="h-3 w-3 sm:h-4 sm:w-4 animate-spin" />
                   ) : (
                     <>
-                      <Trash2 className="h-4 w-4 mr-2" />
+                      <Trash2 className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
                       Delete Permanently
                     </>
                   )}

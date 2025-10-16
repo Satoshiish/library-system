@@ -6,7 +6,7 @@ import { Sidebar } from "@/components/layout/sidebar"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { BookOpen, User, Clock, TrendingUp, Plus, Eye, Loader2, ArrowUpRight, Users, BookCopy, AlertTriangle } from "lucide-react"
+import { BookOpen, User, TrendingUp, Plus, Eye, Loader2, ArrowUpRight, Users, BookCopy, AlertTriangle } from "lucide-react"
 import Link from "next/link"
 import { createClient } from "@supabase/supabase-js"
 import { cn } from "@/lib/utils"
@@ -20,7 +20,7 @@ export default function DashboardPage() {
   const [dashboardStats, setDashboardStats] = useState({
     totalBooks: 0,
     availableBooks: 0,
-    borrowedBooks: 0, // Changed from checkedOutBooks
+    borrowedBooks: 0,
     reservedBooks: 0,
     totalBorrowers: 0,
     overdueBooks: 0,
@@ -120,7 +120,7 @@ export default function DashboardPage() {
         // 📊 Calculate stats - UPDATED to use "borrowed" status
         const totalBooks = booksData?.length || 0
         const availableBooks = booksData?.filter(b => b.status === "available").length || 0
-        const borrowedBooks = booksData?.filter(b => b.status === "borrowed").length || 0 // Updated
+        const borrowedBooks = booksData?.filter(b => b.status === "borrowed").length || 0
         const reservedBooks = booksData?.filter(b => b.status === "reserved").length || 0
         const totalBorrowers = patronsData?.length || 0
 
@@ -150,7 +150,7 @@ export default function DashboardPage() {
         setDashboardStats({
           totalBooks,
           availableBooks,
-          borrowedBooks, // Updated
+          borrowedBooks,
           reservedBooks,
           totalBorrowers,
           overdueBooks: overdueBooksCount,
@@ -312,8 +312,8 @@ export default function DashboardPage() {
               </div>
             </div>
 
-            {/* Stats Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            {/* Stats Cards - REMOVED Overdue card from top row */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               <Card className="backdrop-blur-xl border-border/30 bg-gradient-to-b from-background/95 to-background/90 shadow-lg shadow-indigo-500/10">
                 <CardHeader className="flex flex-row items-center justify-between pb-2">
                   <CardTitle className="text-sm font-medium text-foreground/80">Total Books</CardTitle>
@@ -349,7 +349,6 @@ export default function DashboardPage() {
                 </CardContent>
               </Card>
 
-              {/* UPDATED: Changed from "Checked Out" to "Borrowed" */}
               <Card className="backdrop-blur-xl border-border/30 bg-gradient-to-b from-background/95 to-background/90 shadow-lg shadow-indigo-500/10">
                 <CardHeader className="flex flex-row items-center justify-between pb-2">
                   <CardTitle className="text-sm font-medium text-foreground/80">Borrowed</CardTitle>
@@ -363,39 +362,6 @@ export default function DashboardPage() {
                     {dashboardStats.totalBooks > 0
                       ? ((dashboardStats.borrowedBooks / dashboardStats.totalBooks) * 100).toFixed(1) + "% of total"
                       : "0%"}
-                  </p>
-                </CardContent>
-              </Card>
-
-              <Card className={cn(
-                "backdrop-blur-xl border-border/30 bg-gradient-to-b from-background/95 to-background/90 shadow-lg",
-                dashboardStats.overdueBooks > 0 
-                  ? "border-red-200/50 shadow-red-500/10" 
-                  : "shadow-indigo-500/10"
-              )}>
-                <CardHeader className="flex flex-row items-center justify-between pb-2">
-                  <CardTitle className="text-sm font-medium text-foreground/80">Overdue</CardTitle>
-                  <div className={cn(
-                    "p-2 rounded-lg",
-                    dashboardStats.overdueBooks > 0
-                      ? "bg-gradient-to-tr from-red-500/20 to-orange-500/20"
-                      : "bg-gradient-to-tr from-green-500/20 to-emerald-500/20"
-                  )}>
-                    <Clock className={cn(
-                      "h-4 w-4",
-                      dashboardStats.overdueBooks > 0 ? "text-red-600" : "text-green-600"
-                    )} />
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  <div className={cn(
-                    "text-2xl font-bold",
-                    dashboardStats.overdueBooks > 0 ? "text-destructive" : "text-foreground"
-                  )}>
-                    {dashboardStats.overdueBooks}
-                  </div>
-                  <p className="text-xs text-muted-foreground">
-                    {dashboardStats.overdueBooks > 0 ? "Requires attention" : "All clear!"}
                   </p>
                 </CardContent>
               </Card>
@@ -516,10 +482,10 @@ export default function DashboardPage() {
                               color: "bg-gradient-to-r from-green-500 to-emerald-500",
                               textColor: "text-green-600"
                             }
-                          case "borrowed": // Updated from "checked_out"
+                          case "borrowed":
                           case "active":
                             return {
-                              action: "Borrowed", // Updated from "Checked Out"
+                              action: "Borrowed",
                               color: "bg-gradient-to-r from-blue-500 to-cyan-500",
                               textColor: "text-blue-600"
                             }
@@ -602,7 +568,7 @@ export default function DashboardPage() {
                   <CardTitle className="bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">
                     Popular Books
                   </CardTitle>
-                  <CardDescription>Most frequently borrowed books</CardDescription> {/* Updated description */}
+                  <CardDescription>Most frequently borrowed books</CardDescription>
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-4">
@@ -624,7 +590,7 @@ export default function DashboardPage() {
                           </div>
                         </div>
                         <Badge variant="secondary" className="backdrop-blur-sm bg-muted/50 whitespace-nowrap">
-                          {book.checkouts} borrow{book.checkouts !== 1 ? 's' : ''} {/* Updated text */}
+                          {book.checkouts} borrow{book.checkouts !== 1 ? 's' : ''}
                         </Badge>
                       </div>
                     ))}
@@ -634,7 +600,7 @@ export default function DashboardPage() {
                           <TrendingUp className="h-6 w-6 text-muted-foreground" />
                         </div>
                         <p className="text-muted-foreground font-medium">No popular books data</p>
-                        <p className="text-sm text-muted-foreground mt-1">Borrowing data will appear here</p> {/* Updated text */}
+                        <p className="text-sm text-muted-foreground mt-1">Borrowing data will appear here</p>
                       </div>
                     )}
                   </div>
