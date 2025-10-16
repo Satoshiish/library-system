@@ -87,31 +87,35 @@ export default function BorrowersPage() {
 
   // Overdue calculation function - matching transaction logic
   const isOverdue = (loan: Loan): boolean => {
-    if (loan.status === "returned" || loan.returned_date) {
-      return false
-    }
-
-    const dueDate = new Date(loan.due_date)
-    const today = new Date()
-
-    dueDate.setHours(0, 0, 0, 0)
-    today.setHours(0, 0, 0, 0)
-
-    return dueDate < today
+  if (loan.status === "returned" || loan.returned_date) {
+    return false
   }
 
-  // Calculate days overdue - matching transaction logic
-  const getDaysOverdue = (loan: Loan): number => {
-    if (!isOverdue(loan)) return 0
+  const dueDate = new Date(loan.due_date)
+  const today = new Date()
 
-    const dueDate = new Date(loan.due_date)
-    const today = new Date()
+  dueDate.setHours(0, 0, 0, 0)
+  today.setHours(0, 0, 0, 0)
 
-    const diffTime = today.getTime() - dueDate.getTime()
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
+  return dueDate < today
+}
 
-    return Math.max(0, diffDays)
-  }
+// Calculate days overdue - FIXED: Matching transaction logic
+const getDaysOverdue = (loan: Loan): number => {
+  if (!isOverdue(loan)) return 0
+
+  const dueDate = new Date(loan.due_date)
+  const today = new Date()
+
+  // Set both dates to start of day for accurate comparison
+  dueDate.setHours(0, 0, 0, 0)
+  today.setHours(0, 0, 0, 0)
+
+  const diffTime = today.getTime() - dueDate.getTime()
+  const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24))
+
+  return Math.max(0, diffDays)
+}
 
   // Format date for display
   const formatDate = (dateString: string) => {
