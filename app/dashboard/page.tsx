@@ -29,6 +29,7 @@ export default function DashboardPage() {
   const [popularBooks, setPopularBooks] = useState<any[]>([])
   const [overdueBooks, setOverdueBooks] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   useEffect(() => {
     const fetchDashboardData = async () => {
